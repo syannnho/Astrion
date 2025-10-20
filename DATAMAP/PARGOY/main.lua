@@ -1,4 +1,3 @@
-
 --=== Guards (Auto Reload Friendly - Safe Version) ===
 if _G.__AWM_FULL_LOADED and _G.__AWM_FULL_LOADED.Active then
     for _,v in pairs(game:GetService("CoreGui"):GetChildren()) do
@@ -373,6 +372,52 @@ local function setBypass(state)
     notify("Bypass Animasi", state and "✅ Aktif" or "❌ Nonaktif", 2)
 end
 
+-- ============================================================
+-- Walk to Start Position Function
+-- ============================================================
+local function walkToStartPosition(targetPos)
+    local character = player.Character
+    if not character then return false end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not hrp then return false end
+    
+    local currentPos = hrp.Position
+    local distance = (targetPos - currentPos).Magnitude
+    
+    if distance > 5 then
+        notify("Auto Walk", "Berjalan ke titik awal replay...", 2)
+        
+        humanoid:MoveTo(targetPos)
+        
+        -- Wait until character reaches position or timeout 30 seconds
+        local startTime = tick()
+        local reachedPosition = false
+        
+        while (tick() - startTime) < 30 do
+            if not character or not hrp or not humanoid then break end
+            
+            local currentDist = (hrp.Position - targetPos).Magnitude
+            if currentDist < 5 then
+                reachedPosition = true
+                break
+            end
+            
+            task.wait(0.1)
+        end
+        
+        if not reachedPosition then
+            notify("Auto Walk", "⚠️ Timeout mencapai titik awal, tetap melanjutkan...", 3)
+            return false
+        end
+        
+        return true
+    end
+    
+    return true
+end
+
 -- Jalankan 1 route dari checkpoint terdekat
 local function runRouteOnce()
     if #routes == 0 then return end
@@ -389,6 +434,12 @@ local function runRouteOnce()
         isRunning = false
         setBypass(false)
         return 
+    end
+
+    -- Walk to start position instead of teleporting
+    local startFrame = frames[1]
+    if startFrame then
+        walkToStartPosition(startFrame.Position)
     end
 
     local startIdx = getNearestFrameIndex(frames)
@@ -436,6 +487,13 @@ local function runAllRoutes()
             if not isRunning then break end
             local frames = routes[r][2]
             if #frames < 2 then continue end
+            
+            -- Walk to start position for each route
+            local startFrame = frames[1]
+            if startFrame then
+                walkToStartPosition(startFrame.Position)
+            end
+            
             local startIdx = getNearestFrameIndex(frames)
             for i = startIdx, #frames - 1 do
                 if not isRunning then break end
@@ -490,6 +548,13 @@ local function runSpecificRoute(routeIdx)
     end
     logAndNotify("Memulai track : ", routes[routeIdx][1])
     setBypass(true)
+    
+    -- Walk to start position
+    local startFrame = frames[1]
+    if startFrame then
+        walkToStartPosition(startFrame.Position)
+    end
+    
     local startIdx = getNearestFrameIndex(frames)
     for i = startIdx, #frames - 1 do
         if not isRunning then break end
@@ -964,7 +1029,7 @@ Launcher:Button({
                     -- Re-adjust semua route
                     for i, pack in ipairs(routes) do
                         local name = pack[1]
-                        local url = "https://raw.githubusercontent.com/Bardenss/YAHAYUK/refs/heads/main/cadangan.lua"
+                        local url = "https://raw.githubusercontent.com/yrejinhoo/Replays/refs/heads/main/PARGOY/V2/PARGOY.lua"
                         routes[i] = {name, loadRoute(url)}
                     end
                     notify("Default Height","Diatur ke "..tostring(num).." (route disesuaikan ulang)",2)
