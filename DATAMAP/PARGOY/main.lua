@@ -116,7 +116,7 @@ end
 
 -- HANYA 1 MAP - Ubah URL sesuai kebutuhan
 routes = {
-    {"BASE → CP8", loadRoute("https://raw.githubusercontent.com/Bardenss/YAHAYUK/refs/heads/main/cadangan.lua")},
+    {"BASE → CP8", loadRoute("https://raw.githubusercontent.com/yrejinhoo/Replays/refs/heads/main/PARGOY/V2/PARGOY.lua")},
 }
 
 -- ============================================================
