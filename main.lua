@@ -1,4 +1,4 @@
-```lua
+
 -- VIP Loader System - FULL CODE WITH 24H KEY EXPIRY + LOCAL STORAGE + COUNTDOWN
 -- Connected to: https://astrion-keycrate.vercel.app/api/validate
 
