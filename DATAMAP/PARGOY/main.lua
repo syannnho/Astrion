@@ -585,8 +585,11 @@ local AnimationSets = {
 }
 
 local currentAnimationSet = nil
+local animationEnabled = false -- flag untuk aktifkan animasi custom
 
 local function applyAnimationSet(char, animSet)
+    if not animationEnabled then return end -- cek flag dulu
+    
     local humanoid = char:WaitForChild("Humanoid")
     local animate = char:WaitForChild("Animate")
     
@@ -633,19 +636,23 @@ local function setAnimationSet(setName)
     if not animSet then return end
     
     currentAnimationSet = setName
-    local char = player.Character
-    if char then
-        pcall(function()
-            applyAnimationSet(char, animSet)
-            notify("Animation", "Applied: "..setName, 2)
-        end)
+    
+    -- Hanya apply jika enabled
+    if animationEnabled then
+        local char = player.Character
+        if char then
+            pcall(function()
+                applyAnimationSet(char, animSet)
+                notify("Animation", "Applied: "..setName, 2)
+            end)
+        end
     end
 end
 
--- Auto-apply saat respawn
+-- Auto-apply saat respawn (hanya jika enabled)
 player.CharacterAdded:Connect(function(char)
     task.wait(0.5)
-    if currentAnimationSet then
+    if animationEnabled and currentAnimationSet then
         local animSet = AnimationSets[currentAnimationSet]
         if animSet then
             pcall(function()
@@ -829,6 +836,42 @@ AnimTab:Section({
     TextSize = 18,
 })
 
+-- Toggle untuk enable/disable animasi custom
+AnimTab:Toggle({
+    Title = "Enable Custom Animation",
+    Icon = "lucide:toggle-right",
+    Desc = "Aktifkan untuk pakai animasi custom",
+    Value = false,
+    Callback = function(state)
+        animationEnabled = state
+        
+        if state then
+            -- Aktifkan animasi custom
+            if currentAnimationSet then
+                local animSet = AnimationSets[currentAnimationSet]
+                if animSet then
+                    local char = player.Character
+                    if char then
+                        pcall(function()
+                            applyAnimationSet(char, animSet)
+                            notify("Animation", "✅ Custom animation enabled", 2)
+                        end)
+                    end
+                end
+            else
+                notify("Animation", "⚠️ Pilih animasi dulu!", 2)
+            end
+        else
+            -- Matikan animasi custom (kembali ke default)
+            local char = player.Character
+            if char then
+                char:BreakJoints() -- Respawn untuk reset ke default
+                notify("Animation", "❌ Back to default animation", 2)
+            end
+        end
+    end
+})
+
 -- Buat list untuk dropdown
 local animationNames = {}
 for name, _ in pairs(AnimationSets) do
@@ -843,7 +886,33 @@ AnimTab:Dropdown({
     SearchBarEnabled = true,
     Value = animationNames[1],
     Callback = function(selected)
-        setAnimationSet(selected)
+        currentAnimationSet = selected
+        
+        -- Hanya apply jika toggle enabled
+        if animationEnabled then
+            setAnimationSet(selected)
+        else
+            notify("Animation", "Selected: "..selected.."\nToggle ON untuk apply", 2)
+        end
+    end
+})
+
+AnimTab:Button({
+    Title = "Apply Selected Animation",
+    Icon = "lucide:check",
+    Desc = "Apply animasi yang dipilih (toggle harus ON)",
+    Callback = function()
+        if not currentAnimationSet then
+            notify("Animation", "⚠️ Pilih animasi dulu!", 2)
+            return
+        end
+        
+        if not animationEnabled then
+            notify("Animation", "⚠️ Toggle harus ON!", 2)
+            return
+        end
+        
+        setAnimationSet(currentAnimationSet)
     end
 })
 
@@ -852,6 +921,7 @@ AnimTab:Button({
     Icon = "lucide:rotate-ccw",
     Desc = "Reset animasi ke default Roblox",
     Callback = function()
+        animationEnabled = false
         currentAnimationSet = nil
         local char = player.Character
         if char then
@@ -869,7 +939,7 @@ AnimTab:Section({
 
 AnimTab:Paragraph({
     Title = "How to Use",
-    Desc = "1. Select animation from dropdown\n2. Animation will apply automatically\n3. Animation persist after respawn\n4. Use Reset to remove custom animation",
+    Desc = "1. Select animation from dropdown\n2. Toggle ON 'Enable Custom Animation'\n3. Animation will apply automatically\n4. Toggle OFF to use default animation\n5. Animation persist after respawn",
     Color = "White"
 })
 
