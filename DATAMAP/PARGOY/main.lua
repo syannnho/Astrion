@@ -5,6 +5,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local hrp = nil
+local firstLoadComplete = false -- flag untuk cegah teleport awal
 local Packs = {
     lucide = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/lucide/dist/Icons.lua"))(),
     craft  = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/craft/dist/Icons.lua"))(),
@@ -196,28 +197,37 @@ local function setupBypass(char)
     local humanoid = char:WaitForChild("Humanoid")
     local hrp = char:WaitForChild("HumanoidRootPart")
     local lastPos = hrp.Position
+    local lastVelocity = Vector3.zero
 
     if bypassConn then bypassConn:Disconnect() end
-    bypassConn = RunService.RenderStepped:Connect(function()
+    bypassConn = RunService.Heartbeat:Connect(function(dt)
         if not hrp or not hrp.Parent then return end
         if bypassActive then
-            local direction = (hrp.Position - lastPos)
+            local currentPos = hrp.Position
+            local direction = (currentPos - lastPos)
             local dist = direction.Magnitude
 
-            -- Deteksi perbedaan ketinggian (Y)
-            local yDiff = hrp.Position.Y - lastPos.Y
-            if yDiff > 0.5 then
+            -- Hitung velocity yang smooth
+            local targetVelocity = direction / math.max(dt, 0.016)
+            local smoothVelocity = lastVelocity:Lerp(targetVelocity, math.clamp(dt * 8, 0, 1))
+
+            -- Deteksi perbedaan ketinggian (Y) lebih halus
+            local yDiff = currentPos.Y - lastPos.Y
+            if yDiff > 0.3 then
                 humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            elseif yDiff < -1 then
+            elseif yDiff < -0.5 then
                 humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
             end
 
-            if dist > 0.01 then
-                local moveVector = direction.Unit * math.clamp(dist * 5, 0, 1)
-                humanoid:Move(moveVector, false)
+            if dist > 0.005 then
+                -- Gunakan velocity smooth untuk movement
+                local moveStrength = math.clamp(smoothVelocity.Magnitude * 0.15, 0, 1)
+                humanoid:Move(smoothVelocity.Unit * moveStrength, false)
             else
                 humanoid:Move(Vector3.zero, false)
             end
+
+            lastVelocity = smoothVelocity
         end
         lastPos = hrp.Position
     end)
@@ -325,7 +335,7 @@ local function runSpecificRoute(routeIdx)
 end
 
 -- ===============================
--- Anti Beton Ultra-Smooth
+-- Anti Beton Ultra-Smooth (Presisi Tinggi)
 -- ===============================
 local antiBetonActive = false
 local antiBetonConn
@@ -333,7 +343,8 @@ local antiBetonConn
 local function enableAntiBeton()
     if antiBetonConn then antiBetonConn:Disconnect() end
 
-    antiBetonConn = RunService.Stepped:Connect(function(_, dt)
+    local lastVelocityY = 0
+    antiBetonConn = RunService.Heartbeat:Connect(function(dt)
         local char = player.Character
         if not char then return end
         local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -341,10 +352,23 @@ local function enableAntiBeton()
         if not hrp or not humanoid then return end
 
         if antiBetonActive and humanoid.FloorMaterial == Enum.Material.Air then
-            local targetY = -50
+            local targetY = -48 -- target velocity turun
             local currentY = hrp.Velocity.Y
-            local newY = currentY + (targetY - currentY) * math.clamp(dt * 2.5, 0, 1)
-            hrp.Velocity = Vector3.new(hrp.Velocity.X, newY, hrp.Velocity.Z)
+            
+            -- Smooth acceleration dengan lerp bertahap
+            local smoothFactor = math.clamp(dt * 3.5, 0, 0.95)
+            local newY = lastVelocityY + (targetY - lastVelocityY) * smoothFactor
+            
+            -- Apply dengan smooth transition
+            hrp.Velocity = Vector3.new(
+                hrp.Velocity.X,
+                newY,
+                hrp.Velocity.Z
+            )
+            
+            lastVelocityY = newY
+        else
+            lastVelocityY = 0
         end
     end)
 end
@@ -355,6 +379,281 @@ local function disableAntiBeton()
         antiBetonConn = nil
     end
 end
+
+-- ============================================================
+-- ANIMATION SYSTEM
+-- ============================================================
+local AnimationSets = {
+    ["Run Animation 1"] = {
+        Idle1   = "rbxassetid://122257458498464",
+        Idle2   = "rbxassetid://102357151005774",
+        Walk    = "http://www.roblox.com/asset/?id=18537392113",
+        Run     = "rbxassetid://82598234841035",
+        Jump    = "rbxassetid://75290611992385",
+        Fall    = "http://www.roblox.com/asset/?id=11600206437",
+        Climb   = "http://www.roblox.com/asset/?id=10921257536",
+        Swim    = "http://www.roblox.com/asset/?id=10921264784",
+        SwimIdle= "http://www.roblox.com/asset/?id=10921265698"
+    },
+    ["Run Animation 2"] = {
+        Idle1   = "rbxassetid://122257458498464",
+        Idle2   = "rbxassetid://102357151005774",
+        Walk    = "rbxassetid://122150855457006",
+        Run     = "rbxassetid://82598234841035",
+        Jump    = "rbxassetid://75290611992385",
+        Fall    = "rbxassetid://98600215928904",
+        Climb   = "rbxassetid://88763136693023",
+        Swim    = "rbxassetid://133308483266208",
+        SwimIdle= "rbxassetid://109346520324160"
+    },
+    ["Run Animation 3"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=18537376492",
+        Idle2   = "http://www.roblox.com/asset/?id=18537371272",
+        Walk    = "http://www.roblox.com/asset/?id=18537392113",
+        Run     = "http://www.roblox.com/asset/?id=18537384940",
+        Jump    = "http://www.roblox.com/asset/?id=18537380791",
+        Fall    = "http://www.roblox.com/asset/?id=18537367238",
+        Climb   = "http://www.roblox.com/asset/?id=10921271391",
+        Swim    = "http://www.roblox.com/asset/?id=99384245425157",
+        SwimIdle= "http://www.roblox.com/asset/?id=113199415118199"
+    },
+    ["Run Animation 4"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=118832222982049",
+        Idle2   = "http://www.roblox.com/asset/?id=76049494037641",
+        Walk    = "http://www.roblox.com/asset/?id=92072849924640",
+        Run     = "http://www.roblox.com/asset/?id=72301599441680",
+        Jump    = "http://www.roblox.com/asset/?id=104325245285198",
+        Fall    = "http://www.roblox.com/asset/?id=121152442762481",
+        Climb   = "http://www.roblox.com/asset/?id=507765644",
+        Swim    = "http://www.roblox.com/asset/?id=99384245425157",
+        SwimIdle= "http://www.roblox.com/asset/?id=113199415118199"
+    },
+    ["Run Animation 5"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=656117400",
+        Idle2   = "http://www.roblox.com/asset/?id=656118341",
+        Walk    = "http://www.roblox.com/asset/?id=656121766",
+        Run     = "http://www.roblox.com/asset/?id=656118852",
+        Jump    = "http://www.roblox.com/asset/?id=656117878",
+        Fall    = "http://www.roblox.com/asset/?id=656115606",
+        Climb   = "http://www.roblox.com/asset/?id=656114359",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 6"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=616006778",
+        Idle2   = "http://www.roblox.com/asset/?id=616008087",
+        Walk    = "http://www.roblox.com/asset/?id=616013216",
+        Run     = "http://www.roblox.com/asset/?id=616010382",
+        Jump    = "http://www.roblox.com/asset/?id=616008936",
+        Fall    = "http://www.roblox.com/asset/?id=616005863",
+        Climb   = "http://www.roblox.com/asset/?id=616003713",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 7"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=1083195517",
+        Idle2   = "http://www.roblox.com/asset/?id=1083214717",
+        Walk    = "http://www.roblox.com/asset/?id=1083178339",
+        Run     = "http://www.roblox.com/asset/?id=1083216690",
+        Jump    = "http://www.roblox.com/asset/?id=1083218792",
+        Fall    = "http://www.roblox.com/asset/?id=1083189019",
+        Climb   = "http://www.roblox.com/asset/?id=1083182000",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 8"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=616136790",
+        Idle2   = "http://www.roblox.com/asset/?id=616138447",
+        Walk    = "http://www.roblox.com/asset/?id=616146177",
+        Run     = "http://www.roblox.com/asset/?id=616140816",
+        Jump    = "http://www.roblox.com/asset/?id=616139451",
+        Fall    = "http://www.roblox.com/asset/?id=616134815",
+        Climb   = "http://www.roblox.com/asset/?id=616133594",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 9"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=616088211",
+        Idle2   = "http://www.roblox.com/asset/?id=616089559",
+        Walk    = "http://www.roblox.com/asset/?id=616095330",
+        Run     = "http://www.roblox.com/asset/?id=616091570",
+        Jump    = "http://www.roblox.com/asset/?id=616090535",
+        Fall    = "http://www.roblox.com/asset/?id=616087089",
+        Climb   = "http://www.roblox.com/asset/?id=616086039",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 10"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=910004836",
+        Idle2   = "http://www.roblox.com/asset/?id=910009958",
+        Walk    = "http://www.roblox.com/asset/?id=910034870",
+        Run     = "http://www.roblox.com/asset/?id=910025107",
+        Jump    = "http://www.roblox.com/asset/?id=910016857",
+        Fall    = "http://www.roblox.com/asset/?id=910001910",
+        Climb   = "http://www.roblox.com/asset/?id=616086039",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 11"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=742637544",
+        Idle2   = "http://www.roblox.com/asset/?id=742638445",
+        Walk    = "http://www.roblox.com/asset/?id=742640026",
+        Run     = "http://www.roblox.com/asset/?id=742638842",
+        Jump    = "http://www.roblox.com/asset/?id=742637942",
+        Fall    = "http://www.roblox.com/asset/?id=742637151",
+        Climb   = "http://www.roblox.com/asset/?id=742636889",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 12"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=616111295",
+        Idle2   = "http://www.roblox.com/asset/?id=616113536",
+        Walk    = "http://www.roblox.com/asset/?id=616122287",
+        Run     = "http://www.roblox.com/asset/?id=616117076",
+        Jump    = "http://www.roblox.com/asset/?id=616115533",
+        Fall    = "http://www.roblox.com/asset/?id=616108001",
+        Climb   = "http://www.roblox.com/asset/?id=616104706",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 13"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=657595757",
+        Idle2   = "http://www.roblox.com/asset/?id=657568135",
+        Walk    = "http://www.roblox.com/asset/?id=657552124",
+        Run     = "http://www.roblox.com/asset/?id=657564596",
+        Jump    = "http://www.roblox.com/asset/?id=658409194",
+        Fall    = "http://www.roblox.com/asset/?id=657600338",
+        Climb   = "http://www.roblox.com/asset/?id=658360781",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 14"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=616158929",
+        Idle2   = "http://www.roblox.com/asset/?id=616160636",
+        Walk    = "http://www.roblox.com/asset/?id=616168032",
+        Run     = "http://www.roblox.com/asset/?id=616163682",
+        Jump    = "http://www.roblox.com/asset/?id=616161997",
+        Fall    = "http://www.roblox.com/asset/?id=616157476",
+        Climb   = "http://www.roblox.com/asset/?id=616156119",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 15"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=845397899",
+        Idle2   = "http://www.roblox.com/asset/?id=845400520",
+        Walk    = "http://www.roblox.com/asset/?id=845403856",
+        Run     = "http://www.roblox.com/asset/?id=845386501",
+        Jump    = "http://www.roblox.com/asset/?id=845398858",
+        Fall    = "http://www.roblox.com/asset/?id=845396048",
+        Climb   = "http://www.roblox.com/asset/?id=845392038",
+        Swim    = "http://www.roblox.com/asset/?id=910028158",
+        SwimIdle= "http://www.roblox.com/asset/?id=910030921"
+    },
+    ["Run Animation 16"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=782841498",
+        Idle2   = "http://www.roblox.com/asset/?id=782845736",
+        Walk    = "http://www.roblox.com/asset/?id=782843345",
+        Run     = "http://www.roblox.com/asset/?id=782842708",
+        Jump    = "http://www.roblox.com/asset/?id=782847020",
+        Fall    = "http://www.roblox.com/asset/?id=782846423",
+        Climb   = "http://www.roblox.com/asset/?id=782843869",
+        Swim    = "http://www.roblox.com/asset/?id=18537389531",
+        SwimIdle= "http://www.roblox.com/asset/?id=18537387180"
+    },
+    ["Run Animation 17"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=891621366",
+        Idle2   = "http://www.roblox.com/asset/?id=891633237",
+        Walk    = "http://www.roblox.com/asset/?id=891667138",
+        Run     = "http://www.roblox.com/asset/?id=891636393",
+        Jump    = "http://www.roblox.com/asset/?id=891627522",
+        Fall    = "http://www.roblox.com/asset/?id=891617961",
+        Climb   = "http://www.roblox.com/asset/?id=891609353",
+        Swim    = "http://www.roblox.com/asset/?id=18537389531",
+        SwimIdle= "http://www.roblox.com/asset/?id=18537387180"
+    },
+    ["Run Animation 18"] = {
+        Idle1   = "http://www.roblox.com/asset/?id=750781874",
+        Idle2   = "http://www.roblox.com/asset/?id=750782770",
+        Walk    = "http://www.roblox.com/asset/?id=750785693",
+        Run     = "http://www.roblox.com/asset/?id=750783738",
+        Jump    = "http://www.roblox.com/asset/?id=750782230",
+        Fall    = "http://www.roblox.com/asset/?id=750780242",
+        Climb   = "http://www.roblox.com/asset/?id=750779899",
+        Swim    = "http://www.roblox.com/asset/?id=18537389531",
+        SwimIdle= "http://www.roblox.com/asset/?id=18537387180"
+    },
+}
+
+local currentAnimationSet = nil
+
+local function applyAnimationSet(char, animSet)
+    local humanoid = char:WaitForChild("Humanoid")
+    local animate = char:WaitForChild("Animate")
+    
+    -- Hapus animasi lama
+    for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+        track:Stop()
+    end
+    
+    -- Apply animasi baru
+    if animSet.Idle1 then
+        animate.idle.Animation1.AnimationId = animSet.Idle1
+    end
+    if animSet.Idle2 then
+        animate.idle.Animation2.AnimationId = animSet.Idle2
+    end
+    if animSet.Walk then
+        animate.walk.WalkAnim.AnimationId = animSet.Walk
+    end
+    if animSet.Run then
+        animate.run.RunAnim.AnimationId = animSet.Run
+    end
+    if animSet.Jump then
+        animate.jump.JumpAnim.AnimationId = animSet.Jump
+    end
+    if animSet.Fall then
+        animate.fall.FallAnim.AnimationId = animSet.Fall
+    end
+    if animSet.Climb then
+        animate.climb.ClimbAnim.AnimationId = animSet.Climb
+    end
+    if animSet.Swim then
+        animate.swim.Swim.AnimationId = animSet.Swim
+    end
+    if animSet.SwimIdle then
+        animate.swim.SwimIdle.AnimationId = animSet.SwimIdle
+    end
+    
+    -- Reset humanoid untuk apply perubahan
+    humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+end
+
+local function setAnimationSet(setName)
+    local animSet = AnimationSets[setName]
+    if not animSet then return end
+    
+    currentAnimationSet = setName
+    local char = player.Character
+    if char then
+        pcall(function()
+            applyAnimationSet(char, animSet)
+            notify("Animation", "Applied: "..setName, 2)
+        end)
+    end
+end
+
+-- Auto-apply saat respawn
+player.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    if currentAnimationSet then
+        local animSet = AnimationSets[currentAnimationSet]
+        if animSet then
+            pcall(function()
+                applyAnimationSet(char, animSet)
+            end)
+        end
+    end
+end)
 
 -- ============================================================
 -- UI: WindUI
@@ -416,6 +715,10 @@ local MainTab = Window:Tab({
     Title = "Main",
     Icon = "geist:shareplay",
     Default = true
+})
+local AnimTab = Window:Tab({
+    Title = "Animation",
+    Icon = "lucide:person-standing",
 })
 local SettingsTab = Window:Tab({
     Title = "Tools",
@@ -519,6 +822,58 @@ for idx, data in ipairs(routes) do
 end
 
 -- ============================================================
+-- Animation Tab
+-- ============================================================
+AnimTab:Section({
+    Title = "Character Animations",
+    TextSize = 18,
+})
+
+-- Buat list untuk dropdown
+local animationNames = {}
+for name, _ in pairs(AnimationSets) do
+    table.insert(animationNames, name)
+end
+table.sort(animationNames)
+
+AnimTab:Dropdown({
+    Title = "Select Animation Set",
+    Icon = "lucide:play",
+    Values = animationNames,
+    SearchBarEnabled = true,
+    Value = animationNames[1],
+    Callback = function(selected)
+        setAnimationSet(selected)
+    end
+})
+
+AnimTab:Button({
+    Title = "Reset to Default",
+    Icon = "lucide:rotate-ccw",
+    Desc = "Reset animasi ke default Roblox",
+    Callback = function()
+        currentAnimationSet = nil
+        local char = player.Character
+        if char then
+            char:BreakJoints() -- Respawn untuk reset animasi
+            notify("Animation", "Reset to default", 2)
+        end
+    end
+})
+
+AnimTab:Section({
+    Title = "Info",
+    TextSize = 14,
+    TextTransparency = 0.3,
+})
+
+AnimTab:Paragraph({
+    Title = "How to Use",
+    Desc = "1. Select animation from dropdown\n2. Animation will apply automatically\n3. Animation persist after respawn\n4. Use Reset to remove custom animation",
+    Color = "White"
+})
+
+-- ============================================================
 -- Setup teleport options: BASE + CP1, CP2, dst
 -- ============================================================
 local teleportOptions = {"BASE"}
@@ -550,6 +905,12 @@ SettingsTab:Dropdown({
     SearchBarEnabled = true,
     Value = teleportOptions[1], -- default BASE
     Callback = function(selected)
+        -- Cek flag first load
+        if not firstLoadComplete then
+            notify("Teleport", "Menunggu script load selesai...", 2)
+            return
+        end
+        
         local char = player.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
@@ -580,6 +941,12 @@ SettingsTab:Button({
     Icon = "lucide:refresh-ccw",
     Desc = "Teleport dari BASE sampai CP terakhir sesuai route",
     Callback = function()
+        -- Cek flag first load
+        if not firstLoadComplete then
+            notify("Loop Teleport", "Menunggu script load selesai...", 2)
+            return
+        end
+        
         local char = player.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
@@ -644,7 +1011,7 @@ SettingsTab:Button({
     Title = "Respawn Player",
     Icon = "lucide:user-minus",
     Desc = "Respawn karakter saat ini",
-    Icon = "lucide:refresh-ccw", -- opsional, pakai icon dari Packs
+    Icon = "lucide:refresh-ccw",
     Callback = function()
         respawnPlayer()
     end
@@ -918,7 +1285,13 @@ tampTab:Button({
 })
 
 -- Final notif
-notify("BANTAI GUNUNG", "Script sudan di load, gunakan dengan bijak.", 3)
+notify("BANTAI GUNUNG", "Script sudah di load, gunakan dengan bijak.", 3)
+
+-- Set flag setelah delay 2 detik untuk cegah teleport awal
+task.delay(2, function()
+    firstLoadComplete = true
+    print("✅ First load complete - teleport enabled")
+end)
 
 pcall(function()
     Window:Show()
