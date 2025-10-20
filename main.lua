@@ -1,4 +1,5 @@
--- VIP Loader System - FINAL FIX (MAPS NOW VISIBLE)
+```lua
+-- VIP Loader System - FULL CODE WITH 24H KEY EXPIRY + LOCAL STORAGE + COUNTDOWN
 -- Connected to: https://astrion-keycrate.vercel.app/api/validate
 
 local Players = game:GetService("Players")
@@ -22,12 +23,84 @@ local MAP_SCRIPTS = {
 -- Key validation endpoint
 local KEY_VALIDATE_URL = "https://astrion-keycrate.vercel.app/api/validate"
 
--- Session storage (in-memory)
-local ValidatedKeys = {}
+-- Local storage path
+local STORAGE_FOLDER = "AstrionKeys"
+local STORAGE_FILE = STORAGE_FOLDER .. "/key_" .. userId .. ".json"
+
+-- Key duration
+local KEY_DURATION = 86400 -- 24 hours in seconds
 
 -- Device detection
 local function isMobile()
     return UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+end
+
+-- File system functions
+local function ensureFolder()
+    if not isfolder(STORAGE_FOLDER) then
+        makefolder(STORAGE_FOLDER)
+    end
+end
+
+local function saveKeyData(key, expireTime)
+    ensureFolder()
+    local data = {
+        key = key,
+        expireTime = expireTime,
+        userId = userId
+    }
+    writefile(STORAGE_FILE, HttpService:JSONEncode(data))
+    print("✅ Key saved locally until: " .. os.date("%Y-%m-%d %H:%M:%S", expireTime))
+end
+
+local function loadKeyData()
+    if isfile(STORAGE_FILE) then
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(readfile(STORAGE_FILE))
+        end)
+        if success and data then
+            return data.key, data.expireTime
+        end
+    end
+    return nil, nil
+end
+
+local function deleteKeyData()
+    if isfile(STORAGE_FILE) then
+        delfile(STORAGE_FILE)
+        print("🗑️ Expired key deleted from local storage")
+    end
+end
+
+local function isKeyValid()
+    local key, expireTime = loadKeyData()
+    if key and expireTime then
+        local currentTime = os.time()
+        if currentTime < expireTime then
+            return true, expireTime
+        else
+            deleteKeyData()
+            return false, nil
+        end
+    end
+    return false, nil
+end
+
+-- Format countdown time
+local function formatTimeRemaining(seconds)
+    if seconds <= 0 then
+        return "EXPIRED"
+    end
+    
+    local hours = math.floor(seconds / 3600)
+    local minutes = math.floor((seconds % 3600) / 60)
+    local secs = seconds % 60
+    
+    if hours > 0 then
+        return string.format("%02d:%02d:%02d", hours, minutes, secs)
+    else
+        return string.format("%02d:%02d", minutes, secs)
+    end
 end
 
 -- Fetch VIP IDs from GitHub
@@ -81,8 +154,16 @@ local function validateKey(key)
     end
 end
 
+-- Get expiry time in readable format
+local function getExpiryTimeString(expireTime)
+    if expireTime then
+        return os.date("%Y-%m-%d %H:%M:%S", expireTime)
+    end
+    return ""
+end
+
 -- Create UI
-local function createLoader(isVIP, playerName)
+local function createLoader(isVIP, playerName, keyExpireTime)
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "VIPLoader"
     ScreenGui.ResetOnSpawn = false
@@ -177,6 +258,32 @@ local function createLoader(isVIP, playerName)
     DisplayName.Font = Enum.Font.Gotham
     DisplayName.Parent = LeftPanel
 
+    -- Countdown Timer (below username)
+    local CountdownLabel = Instance.new("TextLabel")
+    CountdownLabel.Size = UDim2.new(1, -20, 0, isMobile() and 30 or 35)
+    CountdownLabel.Position = UDim2.new(0.5, 0, 0, isMobile() and 165 or 235)
+    CountdownLabel.AnchorPoint = Vector2.new(0.5, 0)
+    CountdownLabel.BackgroundTransparency = 1
+    CountdownLabel.Text = ""
+    CountdownLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+    CountdownLabel.TextSize = isMobile() and 11 or 14
+    CountdownLabel.Font = Enum.Font.GothamBold
+    CountdownLabel.Visible = false
+    CountdownLabel.Parent = LeftPanel
+
+    -- Countdown icon/label
+    local CountdownIcon = Instance.new("TextLabel")
+    CountdownIcon.Size = UDim2.new(1, -20, 0, isMobile() and 18 or 22)
+    CountdownIcon.Position = UDim2.new(0.5, 0, 0, isMobile() and 148 or 215)
+    CountdownIcon.AnchorPoint = Vector2.new(0.5, 0)
+    CountdownIcon.BackgroundTransparency = 1
+    CountdownIcon.Text = "⏱️ Key Expires In:"
+    CountdownIcon.TextColor3 = Color3.fromRGB(160, 174, 192)
+    CountdownIcon.TextSize = isMobile() and 8 or 10
+    CountdownIcon.Font = Enum.Font.Gotham
+    CountdownIcon.Visible = false
+    CountdownIcon.Parent = LeftPanel
+
     -- Right Panel
     local RightPanel = Instance.new("Frame")
     RightPanel.Size = UDim2.new(0.65, 0, 1, 0)
@@ -211,7 +318,7 @@ local function createLoader(isVIP, playerName)
 
     -- Auth Container
     local AuthContainer = Instance.new("Frame")
-    AuthContainer.Size = UDim2.new(1, -40, 0, isMobile() and 170 or 220)
+    AuthContainer.Size = UDim2.new(1, -40, 0, isMobile() and 200 or 250)
     AuthContainer.Position = UDim2.new(0.5, 0, 0, isMobile() and 75 or 100)
     AuthContainer.AnchorPoint = Vector2.new(0.5, 0)
     AuthContainer.BackgroundTransparency = 1
@@ -221,7 +328,7 @@ local function createLoader(isVIP, playerName)
     local KeyLabel = Instance.new("TextLabel")
     KeyLabel.Size = UDim2.new(1, 0, 0, isMobile() and 15 or 20)
     KeyLabel.BackgroundTransparency = 1
-    KeyLabel.Text = "🔑 Enter Your Key"
+    KeyLabel.Text = "🔑 Enter Your Key (24 Hours)"
     KeyLabel.TextColor3 = Color3.fromRGB(203, 213, 224)
     KeyLabel.TextSize = isMobile() and 10 or 12
     KeyLabel.Font = Enum.Font.Gotham
@@ -232,7 +339,7 @@ local function createLoader(isVIP, playerName)
     KeyInput.Position = UDim2.new(0, 0, 0, isMobile() and 20 or 25)
     KeyInput.BackgroundColor3 = Color3.fromRGB(26, 32, 58)
     KeyInput.Text = ""
-    KeyInput.PlaceholderText = "Enter 1-day key..."
+    KeyInput.PlaceholderText = "Enter key..."
     KeyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
     KeyInput.PlaceholderColor3 = Color3.fromRGB(113, 128, 150)
     KeyInput.TextSize = isMobile() and 11 or 14
@@ -257,13 +364,14 @@ local function createLoader(isVIP, playerName)
     Instance.new("UICorner", VerifyButton).CornerRadius = UDim.new(0, 8)
 
     local StatusText = Instance.new("TextLabel")
-    StatusText.Size = UDim2.new(1, 0, 0, isMobile() and 20 or 25)
+    StatusText.Size = UDim2.new(1, 0, 0, isMobile() and 40 or 50)
     StatusText.Position = UDim2.new(0, 0, 0, isMobile() and 110 or 135)
     StatusText.BackgroundTransparency = 1
     StatusText.Text = ""
     StatusText.TextColor3 = Color3.fromRGB(231, 76, 60)
     StatusText.TextSize = isMobile() and 9 or 11
     StatusText.Font = Enum.Font.Gotham
+    StatusText.TextWrapped = true
     StatusText.Visible = false
     StatusText.Parent = AuthContainer
 
@@ -295,7 +403,6 @@ local function createLoader(isVIP, playerName)
     MapsLayout.SortOrder = Enum.SortOrder.LayoutOrder
     MapsLayout.Parent = MapsFrame
 
-    -- Auto-update canvas size
     local function updateCanvasSize()
         MapsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, MapsLayout.AbsoluteContentSize.Y + 20)
     end
@@ -361,7 +468,36 @@ local function createLoader(isVIP, playerName)
     YahayukText.Font = Enum.Font.GothamBold
     YahayukText.Parent = YahayukButton
 
-    return ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, ArunikaButton, YahayukButton, WelcomeText, Subtitle
+    -- Pargoy Button
+    local PargoyButton = Instance.new("TextButton")
+    PargoyButton.BackgroundColor3 = Color3.fromRGB(93, 173, 226)
+    PargoyButton.BackgroundTransparency = 0.8
+    PargoyButton.Text = ""
+    PargoyButton.Parent = MapsFrame
+    PargoyButton.LayoutOrder = 3
+    Instance.new("UICorner", PargoyButton).CornerRadius = UDim.new(0, 12)
+    Instance.new("UIStroke", PargoyButton).Color = Color3.fromRGB(93, 173, 226)
+
+    local PargoyIcon = Instance.new("TextLabel")
+    PargoyIcon.Size = UDim2.new(1, 0, 0, isMobile() and 35 or 50)
+    PargoyIcon.Position = UDim2.new(0, 0, 0, isMobile() and 10 or 15)
+    PargoyIcon.BackgroundTransparency = 1
+    PargoyIcon.Text = "🏔️"
+    PargoyIcon.TextSize = isMobile() and 25 or 35
+    PargoyIcon.Font = Enum.Font.GothamBold
+    PargoyIcon.Parent = PargoyButton
+
+    local PargoyText = Instance.new("TextLabel")
+    PargoyText.Size = UDim2.new(1, 0, 0, isMobile() and 25 or 30)
+    PargoyText.Position = UDim2.new(0, 0, 1, isMobile() and -30 or -35)
+    PargoyText.BackgroundTransparency = 1
+    PargoyText.Text = "PARGOY"
+    PargoyText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    PargoyText.TextSize = isMobile() and 11 or 14
+    PargoyText.Font = Enum.Font.GothamBold
+    PargoyText.Parent = PargoyButton
+
+    return ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, ArunikaButton, YahayukButton, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon
 end
 
 -- Show status helper
@@ -397,12 +533,46 @@ end
 local function main()
     local vipIds = fetchVIPIds()
     local isVIP = isUserVIP(userId, vipIds)
-    local sessionKey = "validated_" .. userId
-    local alreadyValid = ValidatedKeys[sessionKey]
+    local keyValid, expireTime = isKeyValid()
 
-    print("User:", LocalPlayer.Name, "| ID:", userId, "| Status:", isVIP and "VIP" or (alreadyValid and "Validated" or "Free"))
+    print("User:", LocalPlayer.Name, "| ID:", userId, "| Status:", isVIP and "VIP" or (keyValid and "Validated" or "Free"))
 
-    local ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, ArunikaButton, YahayukButton, WelcomeText, Subtitle = createLoader(isVIP, LocalPlayer.Name)
+    local ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, ArunikaButton, YahayukButton, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon = createLoader(isVIP, LocalPlayer.Name, expireTime)
+
+    -- Countdown update loop
+    local countdownConnection
+    if keyValid and not isVIP and expireTime then
+        CountdownIcon.Visible = true
+        CountdownLabel.Visible = true
+        
+        countdownConnection = game:GetService("RunService").Heartbeat:Connect(function()
+            local timeRemaining = expireTime - os.time()
+            if timeRemaining > 0 then
+                CountdownLabel.Text = formatTimeRemaining(timeRemaining)
+                
+                -- Color changes based on time
+                if timeRemaining <= 3600 then -- Less than 1 hour
+                    CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60) -- Red
+                elseif timeRemaining <= 10800 then -- Less than 3 hours
+                    CountdownLabel.TextColor3 = Color3.fromRGB(230, 126, 34) -- Orange
+                else
+                    CountdownLabel.TextColor3 = Color3.fromRGB(46, 204, 113) -- Green
+                end
+            else
+                CountdownLabel.Text = "EXPIRED"
+                CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
+                if countdownConnection then
+                    countdownConnection:Disconnect()
+                end
+                -- Force user to re-authenticate
+                deleteKeyData()
+                task.wait(2)
+                if ScreenGui then ScreenGui:Destroy() end
+                if BlurEffect then BlurEffect:Destroy() end
+                main() -- Restart
+            end
+        end)
+    end
 
     -- Animate in
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
@@ -412,13 +582,19 @@ local function main()
         BackgroundTransparency = 0
     }):Play()
 
-    -- If VIP or already validated, show maps
-    if isVIP or alreadyValid then
+
+    -- If VIP or key valid, show maps immediately
+    if isVIP or keyValid then
         task.wait(0.6)
         WelcomeText.Visible = false
         Subtitle.Visible = false
         AuthContainer.Visible = false
         MapContainer.Visible = true
+        
+        if keyValid and not isVIP then
+            local expiryTimeStr = getExpiryTimeString(expireTime)
+            print("✅ Key valid until: " .. expiryTimeStr)
+        end
     end
 
     -- Verify button
@@ -435,15 +611,52 @@ local function main()
         task.spawn(function()
             local ok, err = validateKey(key)
             if ok then
-                ValidatedKeys[sessionKey] = true
-                showStatus(StatusText, "✓ Access granted!", true)
-                task.wait(1.2)
+                local newExpireTime = os.time() + KEY_DURATION
+                saveKeyData(key, newExpireTime)
+                
+                local expiryTimeStr = getExpiryTimeString(newExpireTime)
+                showStatus(StatusText, "✓ Access granted!\nExpires: " .. expiryTimeStr, true)
+                task.wait(1.5)
 
-                -- Switch to map view
                 WelcomeText.Visible = false
                 Subtitle.Visible = false
                 AuthContainer.Visible = false
                 MapContainer.Visible = true
+                
+                -- Start countdown after successful verification
+                CountdownIcon.Visible = true
+                CountdownLabel.Visible = true
+                
+                if countdownConnection then
+                    countdownConnection:Disconnect()
+                end
+                
+                countdownConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                    local timeRemaining = newExpireTime - os.time()
+                    if timeRemaining > 0 then
+                        CountdownLabel.Text = formatTimeRemaining(timeRemaining)
+                        
+                        -- Color changes based on time
+                        if timeRemaining <= 3600 then -- Less than 1 hour
+                            CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60) -- Red
+                        elseif timeRemaining <= 10800 then -- Less than 3 hours
+                            CountdownLabel.TextColor3 = Color3.fromRGB(230, 126, 34) -- Orange
+                        else
+                            CountdownLabel.TextColor3 = Color3.fromRGB(46, 204, 113) -- Green
+                        end
+                    else
+                        CountdownLabel.Text = "EXPIRED"
+                        CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
+                        if countdownConnection then
+                            countdownConnection:Disconnect()
+                        end
+                        deleteKeyData()
+                        task.wait(2)
+                        if ScreenGui then ScreenGui:Destroy() end
+                        if BlurEffect then BlurEffect:Destroy() end
+                        main() -- Restart
+                    end
+                end)
             else
                 showStatus(StatusText, "✗ " .. (err or "Invalid key"), false)
             end
@@ -451,8 +664,26 @@ local function main()
     end)
 
     -- Map buttons
-    ArunikaButton.MouseButton1Click:Connect(function() loadMap("Arunika", ScreenGui, BlurEffect) end)
-    YahayukButton.MouseButton1Click:Connect(function() loadMap("Yahayuk", ScreenGui, BlurEffect) end)
+    ArunikaButton.MouseButton1Click:Connect(function() 
+        if countdownConnection then
+            countdownConnection:Disconnect()
+        end
+        loadMap("Arunika", ScreenGui, BlurEffect) 
+    end)
+    
+    YahayukButton.MouseButton1Click:Connect(function() 
+        if countdownConnection then
+            countdownConnection:Disconnect()
+        end
+        loadMap("Yahayuk", ScreenGui, BlurEffect) 
+    end)
+    
+    PargoyButton.MouseButton1Click:Connect(function() 
+        if countdownConnection then
+            countdownConnection:Disconnect()
+        end
+        loadMap("Pargoy", ScreenGui, BlurEffect) 
+    end)
 
     -- Hover effects
     local function hover(btn)
@@ -471,6 +702,7 @@ local function main()
     hover(VerifyButton)
     hover(ArunikaButton)
     hover(YahayukButton)
+    hover(PargoyButton)
 
     -- Input focus
     KeyInput.Focused:Connect(function()
@@ -481,14 +713,16 @@ local function main()
         local s = KeyInput:FindFirstChildOfClass("UIStroke")
         if s then TweenService:Create(s, TweenInfo.new(0.2), {Transparency = 0.7, Thickness = 2}):Play() end
     end)
-end
-
--- Run
-main()
-print("✅ VIP Loader v6.0 loaded | Device:", isMobile() and "Mobile" or "Desktop"):Create(s, TweenInfo.new(0.2), {Transparency = 0.7, Thickness = 2}):Play() end
+    
+    -- Cleanup on GUI destroy
+    ScreenGui.Destroying:Connect(function()
+        if countdownConnection then
+            countdownConnection:Disconnect()
+        end
     end)
 end
 
 -- Run
 main()
-print("✅ VIP Loader v5.1 loaded | Device:", isMobile() and "Mobile" or "Desktop")
+print("✅ VIP Loader v8.1 loaded with Countdown Timer | Device:", isMobile() and "Mobile" or "Desktop")
+print("📁 Storage location: " .. STORAGE_FOLDER)
