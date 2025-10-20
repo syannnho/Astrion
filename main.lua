@@ -11,12 +11,10 @@ local LocalPlayer = Players.LocalPlayer
 local userId = LocalPlayer.UserId
 
 -- GitHub URL for VIP IDs only
-local GITHUB_VIP_URL = "https://raw.githubusercontent.com/yourusername/vip/main/vip.txt"
+local GITHUB_VIP_URL = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/vip.txt"
 
 -- Map Scripts
 local MAP_SCRIPTS = {
-    Arunika = "https://raw.githubusercontent.com/yourusername/maps/main/arunika.lua",
-    Yahayuk = "https://raw.githubusercontent.com/yrejinhoo/Loader/refs/heads/main/Loader.lua",
     Pargoy = "https://raw.githubusercontent.com/yourusername/maps/main/pargoy.lua"
 }
 
@@ -479,64 +477,6 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     MapsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
     task.wait(0.05)
     updateCanvasSize()
-
-    -- Arunika Button
-    local ArunikaButton = Instance.new("TextButton")
-    ArunikaButton.BackgroundColor3 = Color3.fromRGB(93, 173, 226)
-    ArunikaButton.BackgroundTransparency = 0.8
-    ArunikaButton.Text = ""
-    ArunikaButton.Parent = MapsFrame
-    ArunikaButton.LayoutOrder = 1
-    Instance.new("UICorner", ArunikaButton).CornerRadius = UDim.new(0, 12)
-    Instance.new("UIStroke", ArunikaButton).Color = Color3.fromRGB(93, 173, 226)
-
-    local ArunikaIcon = Instance.new("TextLabel")
-    ArunikaIcon.Size = UDim2.new(1, 0, 0, isMobile() and 35 or 50)
-    ArunikaIcon.Position = UDim2.new(0, 0, 0, isMobile() and 10 or 15)
-    ArunikaIcon.BackgroundTransparency = 1
-    ArunikaIcon.Text = "🗺️"
-    ArunikaIcon.TextSize = isMobile() and 25 or 35
-    ArunikaIcon.Font = Enum.Font.GothamBold
-    ArunikaIcon.Parent = ArunikaButton
-
-    local ArunikaText = Instance.new("TextLabel")
-    ArunikaText.Size = UDim2.new(1, 0, 0, isMobile() and 25 or 30)
-    ArunikaText.Position = UDim2.new(0, 0, 1, isMobile() and -30 or -35)
-    ArunikaText.BackgroundTransparency = 1
-    ArunikaText.Text = "ARUNIKA"
-    ArunikaText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ArunikaText.TextSize = isMobile() and 11 or 14
-    ArunikaText.Font = Enum.Font.GothamBold
-    ArunikaText.Parent = ArunikaButton
-
-    -- Yahayuk Button
-    local YahayukButton = Instance.new("TextButton")
-    YahayukButton.BackgroundColor3 = Color3.fromRGB(93, 173, 226)
-    YahayukButton.BackgroundTransparency = 0.8
-    YahayukButton.Text = ""
-    YahayukButton.Parent = MapsFrame
-    YahayukButton.LayoutOrder = 2
-    Instance.new("UICorner", YahayukButton).CornerRadius = UDim.new(0, 12)
-    Instance.new("UIStroke", YahayukButton).Color = Color3.fromRGB(93, 173, 226)
-
-    local YahayukIcon = Instance.new("TextLabel")
-    YahayukIcon.Size = UDim2.new(1, 0, 0, isMobile() and 35 or 50)
-    YahayukIcon.Position = UDim2.new(0, 0, 0, isMobile() and 10 or 15)
-    YahayukIcon.BackgroundTransparency = 1
-    YahayukIcon.Text = "🌍"
-    YahayukIcon.TextSize = isMobile() and 25 or 35
-    YahayukIcon.Font = Enum.Font.GothamBold
-    YahayukIcon.Parent = YahayukButton
-
-    local YahayukText = Instance.new("TextLabel")
-    YahayukText.Size = UDim2.new(1, 0, 0, isMobile() and 25 or 30)
-    YahayukText.Position = UDim2.new(0, 0, 1, isMobile() and -30 or -35)
-    YahayukText.BackgroundTransparency = 1
-    YahayukText.Text = "YAHAYUK"
-    YahayukText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    YahayukText.TextSize = isMobile() and 11 or 14
-    YahayukText.Font = Enum.Font.GothamBold
-    YahayukText.Parent = YahayukButton
 
     -- Pargoy Button
     local PargoyButton = Instance.new("TextButton")
