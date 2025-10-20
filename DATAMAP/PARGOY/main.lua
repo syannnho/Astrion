@@ -20,7 +20,7 @@ end
 if player.Character then refreshHRP(player.Character) end
 player.CharacterAdded:Connect(refreshHRP)
 
-local frameTime = 1/60 -- naikkan FPS target untuk smooth
+local frameTime = 1/30
 local playbackRate = 1.0
 local isRunning = false
 local routes = {}
@@ -28,18 +28,22 @@ local routes = {}
 -- ============================================================
 -- ROUTE EXAMPLE (isi CFrame)
 -- ============================================================
+-- Tinggi default waktu record
 local DEFAULT_HEIGHT = 4.947289
+-- 4.882498383522034 
 
+-- Ambil tinggi avatar sekarang
 local function getCurrentHeight()
     local char = player.Character or player.CharacterAdded:Wait()
     local humanoid = char:WaitForChild("Humanoid")
     return humanoid.HipHeight + (char:FindFirstChild("Head") and char.Head.Size.Y or 2)
 end
 
+-- Adjustment posisi sesuai tinggi avatar
 local function adjustRoute(frames)
     local adjusted = {}
     local currentHeight = getCurrentHeight()
-    local offsetY = currentHeight - DEFAULT_HEIGHT
+    local offsetY = currentHeight - DEFAULT_HEIGHT  -- full offset
     for _, cf in ipairs(frames) do
         local pos, rot = cf.Position, cf - cf.Position
         local newPos = Vector3.new(pos.X, pos.Y + offsetY, pos.Z)
@@ -48,10 +52,16 @@ local function adjustRoute(frames)
     return adjusted
 end
 
-local intervalFlip = false
+-- ============================================================
+-- ROUTE EXAMPLE (isi CFrame)
+-- ============================================================
+local intervalFlip = false -- toggle interval rotation
 
+-- ============================================================
+-- Hapus frame duplikat
+-- ============================================================
 local function removeDuplicateFrames(frames, tolerance)
-    tolerance = tolerance or 0.01
+    tolerance = tolerance or 0.01 -- toleransi kecil
     if #frames < 2 then return frames end
     local newFrames = {frames[1]}
     for i = 2, #frames do
@@ -61,7 +71,7 @@ local function removeDuplicateFrames(frames, tolerance)
         local prevRot, currRot = prev - prev.Position, curr - curr.Position
 
         local posDiff = (prevPos - currPos).Magnitude
-        local rotDiff = (prevRot.Position - currRot.Position).Magnitude
+        local rotDiff = (prevRot.Position - currRot.Position).Magnitude -- rot diff sederhana
 
         if posDiff > tolerance or rotDiff > tolerance then
             table.insert(newFrames, curr)
@@ -69,7 +79,9 @@ local function removeDuplicateFrames(frames, tolerance)
     end
     return newFrames
 end
-
+-- ============================================================
+-- Apply interval flip
+-- ============================================================
 local function applyIntervalRotation(cf)
     if intervalFlip then
         local pos = cf.Position
@@ -81,12 +93,15 @@ local function applyIntervalRotation(cf)
     end
 end
 
+-- ============================================================
+-- Load route dengan auto adjust + hapus duplikat
+-- ============================================================
 local function loadRoute(url)
     local ok, result = pcall(function()
         return loadstring(game:HttpGet(url))()
     end)
     if ok and type(result) == "table" then
-        local cleaned = removeDuplicateFrames(result, 0.01)
+        local cleaned = removeDuplicateFrames(result, 0.01) -- tambahkan tolerance
         return adjustRoute(cleaned)
     else
         warn("Gagal load route dari: "..url)
@@ -94,15 +109,16 @@ local function loadRoute(url)
     end
 end
 
+-- daftar link raw route (ubah ke link punyamu)
 routes = {
-    {"BASE → FINISH", loadRoute("https://raw.githubusercontent.com/yrejinhoo/Replays/refs/heads/main/PARGOY/V2/PARGOY.lua")},
+    {"BASE → CP8", loadRoute("https://raw.githubusercontent.com/Bardenss/YAHAYUK/refs/heads/main/cadangan.lua")},
 }
 
 -- ============================================================
 -- Fungsi bantu & core logic
 -- ============================================================
 local VirtualUser = game:GetService("VirtualUser")
-local antiIdleActive = true
+local antiIdleActive = true -- langsung aktif
 local antiIdleConn
 
 local function respawnPlayer()
@@ -143,9 +159,8 @@ local function getNearestFrameIndex(frames)
     end
     return startIdx
 end
-
 -- ============================================================
--- ULTRA SMOOTH LERP dengan prediksi velocity
+-- Modifikasi lerpCF untuk interval flip
 -- ============================================================
 local function lerpCF(fromCF, toCF)
     fromCF = applyIntervalRotation(fromCF)
@@ -153,37 +168,19 @@ local function lerpCF(fromCF, toCF)
 
     local duration = frameTime / math.max(0.05, playbackRate)
     local t = 0
-    local steps = 0
-    
     while t < duration do
         if not isRunning then break end
         local dt = task.wait()
         t += dt
-        steps += 1
-        
-        -- Smoothstep interpolation untuk gerakan lebih natural
         local alpha = math.min(t / duration, 1)
-        alpha = alpha * alpha * (3 - 2 * alpha) -- smoothstep formula
-        
         if hrp and hrp.Parent and hrp:IsDescendantOf(workspace) then
-            local newCF = fromCF:Lerp(toCF, alpha)
-            hrp.CFrame = newCF
-            
-            -- Tambah velocity prediction untuk gerakan lebih fluid
-            if steps > 1 then
-                local direction = (toCF.Position - fromCF.Position)
-                local speed = direction.Magnitude / duration
-                hrp.AssemblyLinearVelocity = direction.Unit * math.clamp(speed, 0, 100)
-            end
+            hrp.CFrame = fromCF:Lerp(toCF, alpha)
         end
-    end
-    
-    -- Pastikan posisi akhir tepat
-    if hrp and hrp.Parent then
-        hrp.CFrame = toCF
     end
 end
 
+
+-- notify placeholder
 local notify = function() end
 local function logAndNotify(msg, val)
     local text = val and (msg .. " " .. tostring(val)) or msg
@@ -191,13 +188,9 @@ local function logAndNotify(msg, val)
     notify(msg, tostring(val or ""), 3)
 end
 
--- ============================================================
--- BYPASS ANIMASI ULTRA SMOOTH dengan deteksi presisi
--- ============================================================
+-- === VAR BYPASS ===
 local bypassActive = false
 local bypassConn
-local lastVelocityY = 0
-local velocityBuffer = {} -- buffer untuk smooth detection
 
 local function setupBypass(char)
     local humanoid = char:WaitForChild("Humanoid")
@@ -205,123 +198,47 @@ local function setupBypass(char)
     local lastPos = hrp.Position
 
     if bypassConn then bypassConn:Disconnect() end
-    bypassConn = RunService.Heartbeat:Connect(function(dt)
+    bypassConn = RunService.RenderStepped:Connect(function()
         if not hrp or not hrp.Parent then return end
         if bypassActive then
-            local currentPos = hrp.Position
-            local direction = (currentPos - lastPos)
+            local direction = (hrp.Position - lastPos)
             local dist = direction.Magnitude
-            
-            -- Update velocity buffer
-            table.insert(velocityBuffer, hrp.AssemblyLinearVelocity.Y)
-            if #velocityBuffer > 5 then
-                table.remove(velocityBuffer, 1)
+
+            -- Deteksi perbedaan ketinggian (Y)
+            local yDiff = hrp.Position.Y - lastPos.Y
+            if yDiff > 0.5 then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            elseif yDiff < -1 then
+                humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
             end
-            
-            -- Hitung average velocity untuk deteksi lebih stabil
-            local avgVelY = 0
-            for _, v in ipairs(velocityBuffer) do
-                avgVelY += v
-            end
-            avgVelY = avgVelY / #velocityBuffer
-            
-            -- Deteksi state dengan threshold presisi
-            local yDiff = currentPos.Y - lastPos.Y
-            local acceleration = (avgVelY - lastVelocityY) / math.max(dt, 0.001)
-            
-            -- Jump detection: velocity naik mendadak DAN posisi naik
-            if avgVelY > 8 and yDiff > 0.3 and acceleration > 50 then
-                if humanoid:GetState() ~= Enum.HumanoidStateType.Jumping then
-                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                end
-            
-            -- Fall detection: velocity turun DAN posisi turun
-            elseif avgVelY < -15 and yDiff < -0.5 then
-                if humanoid:GetState() ~= Enum.HumanoidStateType.Freefall then
-                    humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
-                end
-            
-            -- Landing detection: velocity hampir 0 dan di lantai
-            elseif math.abs(avgVelY) < 3 and humanoid.FloorMaterial ~= Enum.Material.Air then
-                if humanoid:GetState() == Enum.HumanoidStateType.Freefall or 
-                   humanoid:GetState() == Enum.HumanoidStateType.Jumping then
-                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                end
-            end
-            
-            -- Smooth movement dengan adaptive speed
+
             if dist > 0.01 then
-                local speed = math.clamp(dist / dt, 0, 50)
-                local moveVector = direction.Unit * math.clamp(speed / 50, 0, 1)
+                local moveVector = direction.Unit * math.clamp(dist * 5, 0, 1)
                 humanoid:Move(moveVector, false)
             else
                 humanoid:Move(Vector3.zero, false)
             end
-            
-            lastVelocityY = avgVelY
-            lastPos = currentPos
         end
+        lastPos = hrp.Position
     end)
 end
 
 player.CharacterAdded:Connect(setupBypass)
 if player.Character then setupBypass(player.Character) end
 
+-- helper otomatis bypass
 local function setBypass(state)
     bypassActive = state
-    velocityBuffer = {} -- reset buffer
-    lastVelocityY = 0
-    notify("Bypass Animasi", state and "✅ Aktif (Ultra Smooth)" or "❌ Nonaktif", 2)
+    notify("Bypass Animasi", state and "✅ Aktif" or "❌ Nonaktif", 2)
 end
 
--- ============================================================
--- Fungsi jalan ke start point (tanpa teleport)
--- ============================================================
-local MAX_DISTANCE_THRESHOLD = 50 -- jarak maksimal sebelum jalan ke start
 
-local function walkToPosition(targetCF, walkSpeed)
-    walkSpeed = walkSpeed or 1.5 -- kecepatan jalan (multiplier)
-    
-    if not hrp or not hrp.Parent then return end
-    
-    local startPos = hrp.Position
-    local targetPos = targetCF.Position
-    local distance = (targetPos - startPos).Magnitude
-    
-    -- Hitung jumlah frame untuk smooth walking
-    local steps = math.ceil(distance / 3) -- 3 stud per step
-    local stepDuration = 0.05 / walkSpeed
-    
-    notify("Berjalan ke Start", string.format("%.1f stud", distance), 2)
-    
-    for i = 1, steps do
-        if not isRunning then break end
-        
-        local alpha = i / steps
-        -- Easing out untuk slow down di akhir
-        local easedAlpha = 1 - math.pow(1 - alpha, 3)
-        
-        local currentPos = startPos:Lerp(targetPos, easedAlpha)
-        local lookAtTarget = CFrame.lookAt(currentPos, targetPos)
-        
-        if hrp and hrp.Parent and hrp:IsDescendantOf(workspace) then
-            hrp.CFrame = CFrame.new(currentPos) * (lookAtTarget - lookAtTarget.Position)
-        end
-        
-        task.wait(stepDuration)
-    end
-    
-    -- Ensure final position + rotation match
-    if hrp and hrp.Parent then
-        hrp.CFrame = targetCF
-    end
-end
-
+-- Jalankan 1 route dari checkpoint terdekat
 local function runRouteOnce()
     if #routes == 0 then return end
     if not hrp then refreshHRP() end
 
-    setBypass(true)
+    setBypass(true) -- otomatis ON
     isRunning = true
 
     local idx = getNearestRoute()
@@ -334,24 +251,13 @@ local function runRouteOnce()
     end
 
     local startIdx = getNearestFrameIndex(frames)
-    local startFrame = frames[startIdx]
-    
-    -- Cek jarak ke start point
-    local distanceToStart = (hrp.Position - startFrame.Position).Magnitude
-    
-    if distanceToStart > MAX_DISTANCE_THRESHOLD then
-        logAndNotify("Jarak jauh terdeteksi", string.format("%.1f stud - Berjalan ke start", distanceToStart))
-        walkToPosition(startFrame, 2.0) -- jalan dengan speed 2x
-        task.wait(0.5) -- pause sebentar sebelum mulai route
-    end
-    
     for i = startIdx, #frames - 1 do
         if not isRunning then break end
         lerpCF(frames[i], frames[i+1])
     end
 
     isRunning = false
-    setBypass(false)
+    setBypass(false) -- otomatis OFF
 end
 
 local function runAllRoutes()
@@ -369,19 +275,7 @@ local function runAllRoutes()
             if not isRunning then break end
             local frames = routes[r][2]
             if #frames < 2 then continue end
-            
             local startIdx = getNearestFrameIndex(frames)
-            local startFrame = frames[startIdx]
-            
-            -- Cek jarak untuk setiap checkpoint
-            local distanceToStart = (hrp.Position - startFrame.Position).Magnitude
-            
-            if distanceToStart > MAX_DISTANCE_THRESHOLD then
-                logAndNotify("CP"..r.." - Jarak jauh", string.format("%.1f stud - Berjalan dulu", distanceToStart))
-                walkToPosition(startFrame, 2.5) -- speed 2.5x untuk route panjang
-                task.wait(0.3)
-            end
-            
             for i = startIdx, #frames - 1 do
                 if not isRunning then break end
                 lerpCF(frames[i], frames[i+1])
@@ -390,6 +284,7 @@ local function runAllRoutes()
 
         setBypass(false)
 
+        -- Respawn + delay 5 detik HANYA jika masih running
         if not isRunning then break end
         respawnPlayer()
         task.wait(5)
@@ -401,8 +296,10 @@ local function stopRoute()
         logAndNotify("Stop route", "Semua route dihentikan!")
     end
 
+    -- hentikan loop utama
     isRunning = false
 
+    -- matikan bypass kalau aktif
     if bypassActive then
         bypassActive = false
         notify("Bypass Animasi", "❌ Nonaktif", 2)
@@ -419,19 +316,7 @@ local function runSpecificRoute(routeIdx)
         return 
     end
     logAndNotify("Memulai track : ", routes[routeIdx][1])
-    
     local startIdx = getNearestFrameIndex(frames)
-    local startFrame = frames[startIdx]
-    
-    -- Cek jarak untuk specific route
-    local distanceToStart = (hrp.Position - startFrame.Position).Magnitude
-    
-    if distanceToStart > MAX_DISTANCE_THRESHOLD then
-        logAndNotify("Jarak jauh terdeteksi", string.format("%.1f stud - Berjalan ke start", distanceToStart))
-        walkToPosition(startFrame, 2.0)
-        task.wait(0.5)
-    end
-    
     for i = startIdx, #frames - 1 do
         if not isRunning then break end
         lerpCF(frames[i], frames[i+1])
@@ -440,17 +325,15 @@ local function runSpecificRoute(routeIdx)
 end
 
 -- ===============================
--- Anti Beton Ultra-Smooth v2
+-- Anti Beton Ultra-Smooth
 -- ===============================
 local antiBetonActive = false
 local antiBetonConn
-local targetVelocityY = -50
-local smoothFactor = 0.15 -- lebih smooth dengan nilai lebih kecil
 
 local function enableAntiBeton()
     if antiBetonConn then antiBetonConn:Disconnect() end
 
-    antiBetonConn = RunService.Heartbeat:Connect(function(dt)
+    antiBetonConn = RunService.Stepped:Connect(function(_, dt)
         local char = player.Character
         if not char then return end
         local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -458,16 +341,10 @@ local function enableAntiBeton()
         if not hrp or not humanoid then return end
 
         if antiBetonActive and humanoid.FloorMaterial == Enum.Material.Air then
-            local currentVel = hrp.AssemblyLinearVelocity
-            local currentY = currentVel.Y
-            
-            -- Smooth lerp velocity Y dengan easing
-            local newY = currentY + (targetVelocityY - currentY) * smoothFactor
-            
-            -- Clamp untuk prevent over-acceleration
-            newY = math.clamp(newY, -100, currentY)
-            
-            hrp.AssemblyLinearVelocity = Vector3.new(currentVel.X, newY, currentVel.Z)
+            local targetY = -50
+            local currentY = hrp.Velocity.Y
+            local newY = currentY + (targetY - currentY) * math.clamp(dt * 2.5, 0, 1)
+            hrp.Velocity = Vector3.new(hrp.Velocity.X, newY, hrp.Velocity.Z)
         end
     end)
 end
@@ -485,15 +362,15 @@ end
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
-    Title = "ASTRION HUB+",
+    Title = "BANTAI GUNUNG",
     Icon = "lucide:mountain-snow",
-    Author = "Jinho",
-    Folder = "ASTRHUB",
+    Author = "bardenss",
+    Folder = "BRDNHub",
     Size = UDim2.fromOffset(580, 460),
     Theme = "Midnight",
     Resizable = true,
     SideBarWidth = 200,
-    Watermark = "Jinho",
+    Watermark = "bardenss",
     User = {
         Enabled = true,
         Anonymous = false,
@@ -507,6 +384,7 @@ local Window = WindUI:CreateWindow({
     }
 })
 
+-- inject notify
 notify = function(title, content, duration)
     pcall(function()
         WindUI:Notify({
@@ -530,8 +408,10 @@ local function enableAntiIdle()
     end)
 end
 
+-- Jalankan saat script load
 enableAntiIdle()
 
+-- Tabs
 local MainTab = Window:Tab({
     Title = "Main",
     Icon = "geist:shareplay",
@@ -550,6 +430,9 @@ local InfoTab = Window:Tab({
     Icon = "lucide:info",
 })
 
+-- ============================================================
+-- Main Tab (Dropdown speed mulai dari 0.25x)
+-- ============================================================
 local speeds = {}
 for v = 0.25, 3, 0.25 do
     table.insert(speeds, string.format("%.2fx", v))
@@ -569,24 +452,6 @@ MainTab:Dropdown({
         end
     end
 })
-
-MainTab:Slider({
-    Title = "Max Distance Walk",
-    Icon = "lucide:footprints",
-    Desc = "Jarak maksimal sebelum jalan ke start (stud)",
-    Value = { 
-        Min = 20,
-        Max = 200,
-        Default = 50
-    },
-    Step = 10,
-    Suffix = " stud",
-    Callback = function(val)
-        MAX_DISTANCE_THRESHOLD = val
-        notify("Distance Threshold", string.format("%.0f stud", val), 2)
-    end
-})
-
 MainTab:Toggle({
     Title = "Interval Flip",
     Icon = "lucide:refresh-ccw",
@@ -599,23 +464,23 @@ MainTab:Toggle({
 })
 
 MainTab:Toggle({
-    Title = "Anti Beton Ultra-Smooth v2",
+    Title = "Anti Beton Ultra-Smooth",
     Icon = "lucide:shield",
-    Desc = "Mencegah jatuh dengan transisi mulus",
+    Desc = "Mencegah jatuh secara kaku saat melayang",
     Value = false,
     Callback = function(state)
         antiBetonActive = state
         if state then
             enableAntiBeton()
             WindUI:Notify({
-                Title = "Anti Beton v2",
-                Content = "✅ Aktif (Presisi Tinggi)",
+                Title = "Anti Beton",
+                Content = "✅ Aktif (Ultra-Smooth)",
                 Duration = 2
             })
         else
             disableAntiBeton()
             WindUI:Notify({
-                Title = "Anti Beton v2",
+                Title = "Anti Beton",
                 Content = "❌ Nonaktif",
                 Duration = 2
             })
@@ -623,6 +488,7 @@ MainTab:Toggle({
     end
 })
 
+-- Main Tab Buttons
 MainTab:Button({
     Title = "START",
     Icon = "craft:back-to-start-stroke",
@@ -652,14 +518,35 @@ for idx, data in ipairs(routes) do
     })
 end
 
+-- Settings
+SettingsTab:Button({
+    Title = "TIMER GUI",
+    Icon = "lucide:layers-2",
+    Desc = "Timer untuk hitung BT",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Bardenss/YAHAYUK/refs/heads/main/TIMER"))()
+    end
+})
+SettingsTab:Button({
+    Title = "PRIVATE SERVER",
+    Icon = "lucide:layers-2",
+    Desc = "Klik untuk pindah ke private server",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Bardenss/PS/refs/heads/main/ps"))()
+    end
+})
+-- ============================================================
+-- Setup teleport options: BASE + CP1, CP2, dst
+-- ============================================================
 local teleportOptions = {"BASE"}
 for idx, _ in ipairs(routes) do
     table.insert(teleportOptions, "CP "..idx)
 end
 
+-- Delay dropdown (1–10 detik)
 local delayValues = {}
 for i = 1, 10 do table.insert(delayValues, tostring(i).."s") end
-local teleportDelay = 3
+local teleportDelay = 3 -- default 3 detik
 
 SettingsTab:Dropdown({
     Title = "Delay Teleport",
@@ -672,12 +559,13 @@ SettingsTab:Dropdown({
     end
 })
 
+-- Dropdown teleport satu checkpoint
 SettingsTab:Dropdown({
     Title = "Teleport ke Checkpoint",
     Icon = "lucide:map-pin",
     Values = teleportOptions,
     SearchBarEnabled = true,
-    Value = teleportOptions[1],
+    Value = teleportOptions[1], -- default BASE
     Callback = function(selected)
         local char = player.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -685,12 +573,12 @@ SettingsTab:Dropdown({
 
         local targetCF
         if selected == "BASE" then
-            targetCF = routes[1][2][1]
+            targetCF = routes[1][2][1] -- frame pertama route 1
         else
             local idx = tonumber(selected:match("%d+"))
             if idx and routes[idx] then
                 local frames = routes[idx][2]
-                targetCF = frames[#frames]
+                targetCF = frames[#frames] -- frame terakhir route idx
             end
         end
 
@@ -703,6 +591,7 @@ SettingsTab:Dropdown({
     end
 })
 
+-- Loop teleport dari BASE → CP terakhir
 SettingsTab:Button({
     Title = "Loop Teleport",
     Icon = "lucide:refresh-ccw",
@@ -713,13 +602,15 @@ SettingsTab:Button({
         if not hrp then return end
 
         task.spawn(function()
+            -- BASE dulu
             hrp.CFrame = routes[1][2][1]
             notify("Loop Teleport", "Teleport ke BASE", 2)
             task.wait(teleportDelay)
 
+            -- Loop dari CP1 sampai CP terakhir
             for idx, _ in ipairs(routes) do
                 local frames = routes[idx][2]
-                hrp.CFrame = frames[#frames]
+                hrp.CFrame = frames[#frames] -- frame terakhir route
                 notify("Loop Teleport", "Teleport ke CP "..idx, 2)
                 task.wait(teleportDelay)
             end
@@ -770,6 +661,7 @@ SettingsTab:Button({
     Title = "Respawn Player",
     Icon = "lucide:user-minus",
     Desc = "Respawn karakter saat ini",
+    Icon = "lucide:refresh-ccw", -- opsional, pakai icon dari Packs
     Callback = function()
         respawnPlayer()
     end
@@ -860,42 +752,32 @@ InfoTab:Button({
     end
 })
 
+-- Info Tab
 InfoTab:Section({
-    Title = "INFO SC v1.1.0",
+    Title = "INFO SC",
     TextSize = 20,
 })
 InfoTab:Section({
     Title = [[
 Replay/route system untuk checkpoint.
 
-UPDATE v1.1.0:
-✨ Ultra Smooth Animation (60 FPS)
-✨ Presisi Jump/Fall Detection dengan buffer
-✨ Smoothstep Interpolation
-✨ Anti Beton v2 (lebih halus)
-✨ Velocity Prediction untuk gerakan fluid
-✨ Auto Walk to Start (no teleport jika jauh)
-
-FITUR AUTO WALK:
-- Jika jarak > threshold → jalan ke start
-- Smooth easing out animation
-- Adjustable distance slider (20-200 stud)
-- Rotasi menghadap target saat jalan
-
 - Start CP = mulai dari checkpoint terdekat
 - Start To End = jalankan semua checkpoint
-- Playback Speed = atur kecepatan (0.25x - 3.00x)
+- Run CPx → CPy = jalur spesifik
+- Playback Speed = atur kecepatan replay (0.25x - 3.00x)
 
-Own jinho
+Own bardenss
     ]],
     TextSize = 16,
     TextTransparency = 0.25,
 })
 
+-- Topbar custom
 Window:DisableTopbarButtons({
     "Close",
 })
 
+-- Open button cantik
 Window:EditOpenButton({
     Title = "BANTAI GUNUNG",
     Icon = "geist:logo-nuxt",
@@ -910,12 +792,14 @@ Window:EditOpenButton({
     Draggable = true,
 })
 
+-- Tambah tag
 Window:Tag({
-    Title = "V1.1.0",
+    Title = "V1.0.1",
     Color = Color3.fromHex("#30ff6a"),
     Radius = 10,
 })
 
+-- Tag Jam
 local TimeTag = Window:Tag({
     Title = "--:--:--",
     Icon = "lucide:timer",
@@ -930,20 +814,26 @@ local TimeTag = Window:Tag({
 
 local hue = 0
 
+-- Rainbow + Jam Real-time
 task.spawn(function()
 	while true do
+		-- Ambil waktu sekarang
 		local now = os.date("*t")
 		local hours   = string.format("%02d", now.hour)
 		local minutes = string.format("%02d", now.min)
 		local seconds = string.format("%02d", now.sec)
 
+		-- Update warna rainbow
 		hue = (hue + 0.01) % 1
 		local color = Color3.fromHSV(hue, 1, 1)
 
+		-- Update judul tag jadi jam lengkap
 		TimeTag:SetTitle(hours .. ":" .. minutes .. ":" .. seconds)
+
+		-- Kalau mau rainbow berjalan, aktifkan ini:
 		TimeTag:SetColor(color)
 
-		task.wait(0.06)
+		task.wait(0.06) -- refresh cepat
 	end
 end)
 
@@ -993,7 +883,7 @@ local themeDropdown = tampTab:Dropdown({
 })
 
 local transparencySlider = tampTab:Slider({
-    Title = "Transparansi",
+    Title = "Transparasi",
     Value = { 
         Min = 0,
         Max = 1,
@@ -1026,6 +916,7 @@ WindUI:OnThemeChange(function(theme)
     canchangetheme = true
 end)
 
+
 tampTab:Button({
     Title = "Create New Theme",
     Icon = "plus",
@@ -1043,7 +934,8 @@ tampTab:Button({
     end
 })
 
-notify("BANTAI GUNUNG v1.1.0", "Script ultra-smooth berhasil dimuat!", 3)
+-- Final notif
+notify("BANTAI GUNUNG", "Script sudan di load, gunakan dengan bijak.", 3)
 
 pcall(function()
     Window:Show()
