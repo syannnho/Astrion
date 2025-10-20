@@ -7,9 +7,9 @@ local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/rel
 -- WINDOW PROCESS
 -------------------------------------------------------------
 local Window = WindUI:CreateWindow({
-    Title = "RullzsyHUB | SIBUATAN",
-    Author = "Created By RullzsyHUB",
-    Folder = "RullzsyHUB",
+    Title = "AstrionHUB | SIBUATAN",
+    Author = "Created By Jinho",
+    Folder = "AstrionHUB",
     NewElements = true,
     HideSearchBar = false,
     OpenButton = {
@@ -188,7 +188,7 @@ BypassSection:Toggle({
 -------------------------------------------------------------
 -- AUTO WALK
 -------------------------------------------------------------
-local mainFolder = "RullzsyHUB"
+local mainFolder = "AstrionHUB"
 local jsonFolder = mainFolder .. "/js_mount_sibuatan_patch_001"
 if not isfolder(mainFolder) then
     makefolder(mainFolder)
@@ -509,10 +509,6 @@ local function startPlayback(data, onComplete)
 end
 
 local function playSingleCheckpointFile(fileName, checkpointIndex)
-    if loopingEnabled then
-        stopPlayback()
-        return
-    end
     autoLoopEnabled = false
     isManualMode = false
     stopPlayback()
@@ -572,11 +568,25 @@ local function playSingleCheckpointFile(fileName, checkpointIndex)
                 Icon = "play"
             })
             startPlayback(data, function()
-                WindUI:Notify({
-                    Title = "Auto Walk (Manual)",
-                    Desc = "Auto walk selesai!",
-                    Icon = "check"
-                })
+                if loopingEnabled then
+                    task.wait(0.5)
+                    if checkpointIndex < #jsonFiles then
+                        playSingleCheckpointFile(jsonFiles[checkpointIndex + 1], checkpointIndex + 1)
+                    else
+                        WindUI:Notify({
+                            Title = "Auto Loop",
+                            Desc = "Semua checkpoint selesai!",
+                            Icon = "check"
+                        })
+                        loopingEnabled = false
+                    end
+                else
+                    WindUI:Notify({
+                        Title = "Auto Walk (Manual)",
+                        Desc = "Auto walk selesai!",
+                        Icon = "check"
+                    })
+                end
             end)
         else
             WindUI:Notify({
@@ -700,12 +710,12 @@ local checkpointButtons = {
     {"Checkpoint 43", "checkpoint_43.json"},
 }
 
-for _, checkpoint in ipairs(checkpointButtons) do
+for idx, checkpoint in ipairs(checkpointButtons) do
     ManualSection:Button({
         Title = "Auto Walk (" .. checkpoint[1] .. ")",
         Icon = "walk",
         Callback = function()
-            playSingleCheckpointFile(checkpoint[2], _)
+            playSingleCheckpointFile(checkpoint[2], idx)
         end
     })
 end
@@ -758,7 +768,7 @@ CreditsSection:Section({
 })
 
 CreditsSection:Section({
-    Title = "Developer: RullzsyHUB",
+    Title = "Developer: Jinho",
     TextSize = 14,
 })
 
@@ -770,6 +780,6 @@ CreditsSection:Section({
 -----| FINALIZE |-----
 WindUI:Notify({
     Title = "Welcome",
-    Desc = "RullzsyHUB SIBUATAN loaded successfully!",
+    Desc = "AstrionHUB SIBUATAN loaded successfully!",
     Icon = "check"
 })
