@@ -26,20 +26,24 @@ local isRunning = false
 local routes = {}
 
 -- ============================================================
--- ROUTE CONFIG
+-- ROUTE EXAMPLE (isi CFrame)
 -- ============================================================
+-- Tinggi default waktu record
 local DEFAULT_HEIGHT = 4.947289
+-- 4.882498383522034 
 
+-- Ambil tinggi avatar sekarang
 local function getCurrentHeight()
     local char = player.Character or player.CharacterAdded:Wait()
     local humanoid = char:WaitForChild("Humanoid")
     return humanoid.HipHeight + (char:FindFirstChild("Head") and char.Head.Size.Y or 2)
 end
 
+-- Adjustment posisi sesuai tinggi avatar
 local function adjustRoute(frames)
     local adjusted = {}
     local currentHeight = getCurrentHeight()
-    local offsetY = currentHeight - DEFAULT_HEIGHT
+    local offsetY = currentHeight - DEFAULT_HEIGHT  -- full offset
     for _, cf in ipairs(frames) do
         local pos, rot = cf.Position, cf - cf.Position
         local newPos = Vector3.new(pos.X, pos.Y + offsetY, pos.Z)
@@ -48,10 +52,16 @@ local function adjustRoute(frames)
     return adjusted
 end
 
-local intervalFlip = false
+-- ============================================================
+-- ROUTE EXAMPLE (isi CFrame)
+-- ============================================================
+local intervalFlip = false -- toggle interval rotation
 
+-- ============================================================
+-- Hapus frame duplikat
+-- ============================================================
 local function removeDuplicateFrames(frames, tolerance)
-    tolerance = tolerance or 0.01
+    tolerance = tolerance or 0.01 -- toleransi kecil
     if #frames < 2 then return frames end
     local newFrames = {frames[1]}
     for i = 2, #frames do
@@ -61,7 +71,7 @@ local function removeDuplicateFrames(frames, tolerance)
         local prevRot, currRot = prev - prev.Position, curr - curr.Position
 
         local posDiff = (prevPos - currPos).Magnitude
-        local rotDiff = (prevRot.Position - currRot.Position).Magnitude
+        local rotDiff = (prevRot.Position - currRot.Position).Magnitude -- rot diff sederhana
 
         if posDiff > tolerance or rotDiff > tolerance then
             table.insert(newFrames, curr)
@@ -69,7 +79,9 @@ local function removeDuplicateFrames(frames, tolerance)
     end
     return newFrames
 end
-
+-- ============================================================
+-- Apply interval flip
+-- ============================================================
 local function applyIntervalRotation(cf)
     if intervalFlip then
         local pos = cf.Position
@@ -81,12 +93,15 @@ local function applyIntervalRotation(cf)
     end
 end
 
+-- ============================================================
+-- Load route dengan auto adjust + hapus duplikat
+-- ============================================================
 local function loadRoute(url)
     local ok, result = pcall(function()
         return loadstring(game:HttpGet(url))()
     end)
     if ok and type(result) == "table" then
-        local cleaned = removeDuplicateFrames(result, 0.01)
+        local cleaned = removeDuplicateFrames(result, 0.01) -- tambahkan tolerance
         return adjustRoute(cleaned)
     else
         warn("Gagal load route dari: "..url)
@@ -94,6 +109,7 @@ local function loadRoute(url)
     end
 end
 
+-- daftar link raw route (ubah ke link punyamu)
 routes = {
     {"BASE → CP8", loadRoute("https://raw.githubusercontent.com/Bardenss/YAHAYUK/refs/heads/main/cadangan.lua")},
 }
@@ -102,7 +118,7 @@ routes = {
 -- Fungsi bantu & core logic
 -- ============================================================
 local VirtualUser = game:GetService("VirtualUser")
-local antiIdleActive = true
+local antiIdleActive = true -- langsung aktif
 local antiIdleConn
 
 local function respawnPlayer()
@@ -143,7 +159,9 @@ local function getNearestFrameIndex(frames)
     end
     return startIdx
 end
-
+-- ============================================================
+-- Modifikasi lerpCF untuk interval flip
+-- ============================================================
 local function lerpCF(fromCF, toCF)
     fromCF = applyIntervalRotation(fromCF)
     toCF = applyIntervalRotation(toCF)
@@ -161,6 +179,8 @@ local function lerpCF(fromCF, toCF)
     end
 end
 
+
+-- notify placeholder
 local notify = function() end
 local function logAndNotify(msg, val)
     local text = val and (msg .. " " .. tostring(val)) or msg
@@ -184,6 +204,7 @@ local function setupBypass(char)
             local direction = (hrp.Position - lastPos)
             local dist = direction.Magnitude
 
+            -- Deteksi perbedaan ketinggian (Y)
             local yDiff = hrp.Position.Y - lastPos.Y
             if yDiff > 0.5 then
                 humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
@@ -205,204 +226,20 @@ end
 player.CharacterAdded:Connect(setupBypass)
 if player.Character then setupBypass(player.Character) end
 
+-- helper otomatis bypass
 local function setBypass(state)
     bypassActive = state
     notify("Bypass Animasi", state and "✅ Aktif" or "❌ Nonaktif", 2)
 end
 
--- ============================================================
--- CP DETECTOR GLOBALS
--- ============================================================
-local autoCPEnabled = false
-local cpKeyword = "cp"
-local cpDetectRadius = 15
-local cpDelayAfterDetect = 25
-local cachedCPs = {}
-local lastCPScan = 0
-local CP_SCAN_INTERVAL = 5
-local triggeredCP = {}
-local completedCPs = {}
-local CP_RADIUS = cpDetectRadius
-local CP_COOLDOWN = cpDelayAfterDetect
-local lastReplayIndex = 1
-local lastReplayPos = nil
-local lastUsedKeyword = nil
-local cpHighlight = nil
-local cpBeamEnabled = true
-local awaitingCP = false
-
--- ============================================================
--- Pathfinding helper
--- ============================================================
-local PathfindingService = game:GetService("PathfindingService")
-
-local function walkTo(targetPos)
-    local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or not hrp then return end
-    local path = PathfindingService:CreatePath({
-        AgentRadius = 2, AgentHeight = 5,
-        AgentCanJump = true, AgentCanClimb = true,
-        WaypointSpacing = 4
-    })
-    path:ComputeAsync(hrp.Position, targetPos)
-    for _, wp in ipairs(path:GetWaypoints()) do
-        if not humanoid or humanoid.Health <= 0 then break end
-        humanoid:MoveTo(wp.Position + Vector3.new(0, 0.5, 0))
-        humanoid.MoveToFinished:Wait(2)
-    end
-end
-
--- ============================================================
--- CP Handler (Blocking)
--- ============================================================
-local function handleCP(cp)
-    if not cp or not hrp then return end
-    awaitingCP = true
-    local targetPos = cp.Position + Vector3.new(0, 3, 0)
-    walkTo(targetPos)
-
-    local reached = false
-    for _ = 1, 100 do
-        if hrp and (hrp.Position - cp.Position).Magnitude <= 5 then reached = true break end
-        task.wait(0.1)
-    end
-
-    if reached then
-        completedCPs[cp] = true
-        notify("CP Detector", string.format("CP '%s' disentuh, menunggu %ds...", cp.Name, cpDelayAfterDetect), 2)
-        task.wait(cpDelayAfterDetect)
-    end
-
-    if lastReplayPos then walkTo(lastReplayPos) end
-    notify("CP Detector", "Kembali ke lintasan, lanjut replay...", 2)
-    task.wait(0.2)
-    awaitingCP = false
-end
-
--- ============================================================
--- CP Finder (cache + skip completed)
--- ============================================================
-local function findNearestCP(radius, keyword)
-    if not hrp then return nil end
-    local now = tick()
-    local kw = (keyword or cpKeyword):lower()
-    if not kw or kw == "" then return nil end
-
-    if tick() - lastCPScan > CP_SCAN_INTERVAL or kw ~= lastUsedKeyword then
-        lastUsedKeyword = kw
-        lastCPScan = tick()
-        cachedCPs = {}
-        local searchRoot = workspace:FindFirstChild("Checkpoints") or workspace
-        for _, part in ipairs(searchRoot:GetDescendants()) do
-            if part:IsA("BasePart") then
-                local pname = part.Name:lower()
-                if pname == kw or pname:match("^" .. kw .. "[%d_]*$") then
-                    table.insert(cachedCPs, part)
-                end
-            end
-        end
-    end
-
-    local nearest, nearestDist = nil, radius or CP_RADIUS
-    local hrpPos, hrpLook = hrp.Position, hrp.CFrame.LookVector
-
-    for _, part in ipairs(cachedCPs) do
-        if part and part:IsDescendantOf(workspace) and not completedCPs[part] then
-            local diff = (part.Position - hrpPos)
-            local dist = diff.Magnitude
-            if dist <= nearestDist and diff.Unit:Dot(hrpLook) > 0.25 then
-                local lastTriggered = triggeredCP[part]
-                if not lastTriggered or now - lastTriggered >= CP_COOLDOWN then
-                    nearest = part
-                    nearestDist = dist
-                end
-            end
-        end
-    end
-
-    if cpBeamEnabled and nearest then
-        if cpHighlight then cpHighlight:Destroy() cpHighlight = nil end
-        local attachHRP = Instance.new("Attachment", hrp)
-        local attachCP  = Instance.new("Attachment", nearest)
-        local beam = Instance.new("Beam")
-        beam.Color         = ColorSequence.new(Color3.fromRGB(255,220,0))
-        beam.Width0        = 0.25
-        beam.Width1        = 0.25
-        beam.Attachment0   = attachHRP
-        beam.Attachment1   = attachCP
-        beam.LightEmission = 1
-        beam.FaceCamera    = true
-        beam.Texture       = "rbxassetid://446111271"
-        beam.TextureSpeed  = 0.5
-        beam.Transparency  = NumberSequence.new(0.1)
-        beam.Parent        = hrp
-        cpHighlight = beam
-        task.delay(3, function()
-            if cpHighlight then cpHighlight:Destroy() cpHighlight = nil end
-            if attachHRP then attachHRP:Destroy() end
-            if attachCP then attachCP:Destroy() end
-        end)
-    elseif not cpBeamEnabled and cpHighlight then
-        cpHighlight:Destroy() cpHighlight = nil
-    end
-
-    return nearest
-end
-
--- ============================================================
--- Walk to Start Position Function
--- ============================================================
-local function walkToStartPosition(targetPos)
-    local character = player.Character
-    if not character then return false end
-    
-    local humanoid = character:FindFirstChild("Humanoid")
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or not hrp then return false end
-    
-    local currentPos = hrp.Position
-    local distance = (targetPos - currentPos).Magnitude
-    
-    if distance > 5 then
-        notify("Auto Walk", "🚶 Berjalan ke titik awal replay...", 2)
-        
-        humanoid:MoveTo(targetPos)
-        
-        local startTime = tick()
-        local reachedPosition = false
-        
-        while (tick() - startTime) < 30 do
-            if not character or not hrp or not humanoid then break end
-            
-            local currentDist = (hrp.Position - targetPos).Magnitude
-            if currentDist < 5 then
-                reachedPosition = true
-                notify("Auto Walk", "✅ Sampai di posisi awal!", 1)
-                break
-            end
-            
-            task.wait(0.1)
-        end
-        
-        if not reachedPosition then
-            notify("Auto Walk", "⚠️ Timeout mencapai titik awal, tetap melanjutkan...", 3)
-            return false
-        end
-        
-        return true
-    end
-    
-    return true
-end
 
 -- Jalankan 1 route dari checkpoint terdekat
 local function runRouteOnce()
     if #routes == 0 then return end
     if not hrp then refreshHRP() end
 
-    setBypass(true)
+    setBypass(true) -- otomatis ON
     isRunning = true
-    completedCPs = {}
 
     local idx = getNearestRoute()
     logAndNotify("Mulai dari cp : ", routes[idx][1])
@@ -413,35 +250,14 @@ local function runRouteOnce()
         return 
     end
 
-    -- Walk to start position
-    local startFrame = frames[1]
-    if startFrame then
-        walkToStartPosition(startFrame.Position)
-    end
-
     local startIdx = getNearestFrameIndex(frames)
     for i = startIdx, #frames - 1 do
         if not isRunning then break end
-        lastReplayIndex = i
-        lastReplayPos = frames[i].Position
-
-        -- Auto CP Detection
-        if autoCPEnabled then
-            CP_RADIUS = cpDetectRadius
-            CP_COOLDOWN = cpDelayAfterDetect
-            local cp = findNearestCP(CP_RADIUS, cpKeyword)
-            if cp then
-                triggeredCP[cp] = tick()
-                notify("CP Detector", "CP terdekat terdeteksi. Menuju CP...", 2)
-                handleCP(cp)
-            end
-        end
-
         lerpCF(frames[i], frames[i+1])
     end
 
     isRunning = false
-    setBypass(false)
+    setBypass(false) -- otomatis OFF
 end
 
 local function runAllRoutes()
@@ -451,7 +267,6 @@ local function runAllRoutes()
     while isRunning do
         if not hrp then refreshHRP() end
         setBypass(true)
-        completedCPs = {}
 
         local idx = getNearestRoute()
         logAndNotify("Sesuaikan dari cp : ", routes[idx][1])
@@ -460,37 +275,16 @@ local function runAllRoutes()
             if not isRunning then break end
             local frames = routes[r][2]
             if #frames < 2 then continue end
-            
-            -- Walk to start position for each route
-            local startFrame = frames[1]
-            if startFrame then
-                walkToStartPosition(startFrame.Position)
-            end
-            
             local startIdx = getNearestFrameIndex(frames)
             for i = startIdx, #frames - 1 do
                 if not isRunning then break end
-                lastReplayIndex = i
-                lastReplayPos = frames[i].Position
-
-                -- Auto CP Detection
-                if autoCPEnabled then
-                    CP_RADIUS = cpDetectRadius
-                    CP_COOLDOWN = cpDelayAfterDetect
-                    local cp = findNearestCP(CP_RADIUS, cpKeyword)
-                    if cp then
-                        triggeredCP[cp] = tick()
-                        notify("CP Detector", "CP terdekat terdeteksi. Menuju CP...", 2)
-                        handleCP(cp)
-                    end
-                end
-
                 lerpCF(frames[i], frames[i+1])
             end
         end
 
         setBypass(false)
 
+        -- Respawn + delay 5 detik HANYA jika masih running
         if not isRunning then break end
         respawnPlayer()
         task.wait(5)
@@ -502,8 +296,10 @@ local function stopRoute()
         logAndNotify("Stop route", "Semua route dihentikan!")
     end
 
+    -- hentikan loop utama
     isRunning = false
 
+    -- matikan bypass kalau aktif
     if bypassActive then
         bypassActive = false
         notify("Bypass Animasi", "❌ Nonaktif", 2)
@@ -514,43 +310,18 @@ local function runSpecificRoute(routeIdx)
     if not routes[routeIdx] then return end
     if not hrp then refreshHRP() end
     isRunning = true
-    completedCPs = {}
     local frames = routes[routeIdx][2]
     if #frames < 2 then 
         isRunning = false 
         return 
     end
     logAndNotify("Memulai track : ", routes[routeIdx][1])
-    setBypass(true)
-    
-    -- Walk to start position
-    local startFrame = frames[1]
-    if startFrame then
-        walkToStartPosition(startFrame.Position)
-    end
-    
     local startIdx = getNearestFrameIndex(frames)
     for i = startIdx, #frames - 1 do
         if not isRunning then break end
-        lastReplayIndex = i
-        lastReplayPos = frames[i].Position
-
-        -- Auto CP Detection
-        if autoCPEnabled then
-            CP_RADIUS = cpDetectRadius
-            CP_COOLDOWN = cpDelayAfterDetect
-            local cp = findNearestCP(CP_RADIUS, cpKeyword)
-            if cp then
-                triggeredCP[cp] = tick()
-                notify("CP Detector", "CP terdekat terdeteksi. Menuju CP...", 2)
-                handleCP(cp)
-            end
-        end
-
         lerpCF(frames[i], frames[i+1])
     end
     isRunning = false
-    setBypass(false)
 end
 
 -- ===============================
@@ -613,6 +384,7 @@ local Window = WindUI:CreateWindow({
     }
 })
 
+-- inject notify
 notify = function(title, content, duration)
     pcall(function()
         WindUI:Notify({
@@ -636,16 +408,14 @@ local function enableAntiIdle()
     end)
 end
 
+-- Jalankan saat script load
 enableAntiIdle()
 
+-- Tabs
 local MainTab = Window:Tab({
     Title = "Main",
     Icon = "geist:shareplay",
     Default = true
-})
-local AutomationTab = Window:Tab({
-    Title = "Automation",
-    Icon = "lucide:refresh-cw"
 })
 local SettingsTab = Window:Tab({
     Title = "Tools",
@@ -661,7 +431,7 @@ local InfoTab = Window:Tab({
 })
 
 -- ============================================================
--- Main Tab
+-- Main Tab (Dropdown speed mulai dari 0.25x)
 -- ============================================================
 local speeds = {}
 for v = 0.25, 3, 0.25 do
@@ -718,6 +488,7 @@ MainTab:Toggle({
     end
 })
 
+-- Main Tab Buttons
 MainTab:Button({
     Title = "START",
     Icon = "craft:back-to-start-stroke",
@@ -747,97 +518,7 @@ for idx, data in ipairs(routes) do
     })
 end
 
--- ============================================================
--- AUTOMATION TAB - CP DETECTOR (FIXED)
--- ============================================================
-local AutomationSection = AutomationTab:Section({ Title = "CP Detector Settings", Icon = "lucide:radar" })
-
-AutomationTab:Toggle({
-    Title = "🔎 Auto Detect CP During Route",
-    Icon = "lucide:map-pin",
-    Value = false,
-    Desc = "Pause replay saat mendeteksi BasePart sesuai keyword",
-    Callback = function(state)
-        autoCPEnabled = state
-        notify("CP Detector", state and "✅ Aktif" or "❌ Nonaktif", 2)
-    end
-})
-
-AutomationTab:Toggle({
-    Title = "🔦 CP Beam Visual",
-    Icon = "lucide:lightbulb",
-    Value = cpBeamEnabled,
-    Desc = "Tampilkan garis arah ke CP terdekat",
-    Callback = function(state)
-        cpBeamEnabled = state
-        notify("CP Beam", state and "✅ Aktif" or "❌ Nonaktif", 2)
-        if not state and cpHighlight then
-            cpHighlight:Destroy()
-            cpHighlight = nil
-        end
-    end
-})
-
-AutomationTab:Slider({
-    Title = "⏲️ Delay setelah CP (detik)",
-    Icon = "lucide:clock",
-    Value = { Min = 1, Max = 60, Default = cpDelayAfterDetect },
-    Step = 1,
-    Suffix = "s",
-    Callback = function(val)
-        cpDelayAfterDetect = tonumber(val) or cpDelayAfterDetect
-        notify("CP Detector", "Delay: " .. tostring(cpDelayAfterDetect) .. " dtk", 2)
-    end
-})
-
-AutomationTab:Slider({
-    Title = "📏 Jarak Deteksi CP (studs)",
-    Icon = "lucide:ruler",
-    Value = { Min = 5, Max = 100, Default = cpDetectRadius },
-    Step = 1,
-    Suffix = "studs",
-    Callback = function(val)
-        cpDetectRadius = tonumber(val) or cpDetectRadius
-        notify("CP Detector", "Radius: " .. tostring(cpDetectRadius) .. " studs", 2)
-    end
-})
-
-AutomationTab:Input({
-    Title = "🧩 Keyword BasePart CP",
-    Icon = "lucide:text-cursor",
-    Placeholder = "mis. cp / 14 / pad",
-    Default = cpKeyword,
-    Callback = function(text)
-        if text and text ~= "" then
-            cpKeyword = text
-            lastUsedKeyword = nil
-            notify("CP Detector", "Keyword diubah ke: " .. text, 2)
-        else
-            notify("CP Detector", "Keyword kosong, tetap: " .. cpKeyword, 2)
-        end
-    end
-})
-
-local AutomationInfoSection = AutomationTab:Section({ Title = "CP Detector Info", Icon = "lucide:info" })
-
-AutomationTab:Paragraph({
-    Title = "Cara Kerja CP Detector",
-    Desc = [[
-• Auto Detect CP = Deteksi checkpoint otomatis saat replay
-• CP Beam = Garis visual ke checkpoint terdekat
-• Delay = Waktu tunggu setelah sentuh checkpoint
-• Jarak Deteksi = Radius mencari checkpoint (studs)
-• Keyword = Nama BasePart checkpoint (huruf kecil)
-
-Contoh keyword: "cp", "checkpoint", "pad", "14"
-Script akan mencari part dengan nama yang cocok.
-    ]],
-    TextSize = 14,
-})
-
--- ============================================================
--- SETTINGS TAB
--- ============================================================
+-- Settings
 SettingsTab:Button({
     Title = "TIMER GUI",
     Icon = "lucide:layers-2",
@@ -854,10 +535,18 @@ SettingsTab:Button({
         loadstring(game:HttpGet("https://raw.githubusercontent.com/Bardenss/PS/refs/heads/main/ps"))()
     end
 })
+-- ============================================================
+-- Setup teleport options: BASE + CP1, CP2, dst
+-- ============================================================
+local teleportOptions = {"BASE"}
+for idx, _ in ipairs(routes) do
+    table.insert(teleportOptions, "CP "..idx)
+end
 
+-- Delay dropdown (1–10 detik)
 local delayValues = {}
 for i = 1, 10 do table.insert(delayValues, tostring(i).."s") end
-local teleportDelay = 3
+local teleportDelay = 3 -- default 3 detik
 
 SettingsTab:Dropdown({
     Title = "Delay Teleport",
@@ -870,6 +559,66 @@ SettingsTab:Dropdown({
     end
 })
 
+-- Dropdown teleport satu checkpoint
+SettingsTab:Dropdown({
+    Title = "Teleport ke Checkpoint",
+    Icon = "lucide:map-pin",
+    Values = teleportOptions,
+    SearchBarEnabled = true,
+    Value = teleportOptions[1], -- default BASE
+    Callback = function(selected)
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        local targetCF
+        if selected == "BASE" then
+            targetCF = routes[1][2][1] -- frame pertama route 1
+        else
+            local idx = tonumber(selected:match("%d+"))
+            if idx and routes[idx] then
+                local frames = routes[idx][2]
+                targetCF = frames[#frames] -- frame terakhir route idx
+            end
+        end
+
+        if targetCF then
+            hrp.CFrame = targetCF
+            notify("Teleport", "Berhasil ke "..selected, 2)
+        else
+            notify("Teleport", "Gagal teleport!", 2)
+        end
+    end
+})
+
+-- Loop teleport dari BASE → CP terakhir
+SettingsTab:Button({
+    Title = "Loop Teleport",
+    Icon = "lucide:refresh-ccw",
+    Desc = "Teleport dari BASE sampai CP terakhir sesuai route",
+    Callback = function()
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+
+        task.spawn(function()
+            -- BASE dulu
+            hrp.CFrame = routes[1][2][1]
+            notify("Loop Teleport", "Teleport ke BASE", 2)
+            task.wait(teleportDelay)
+
+            -- Loop dari CP1 sampai CP terakhir
+            for idx, _ in ipairs(routes) do
+                local frames = routes[idx][2]
+                hrp.CFrame = frames[#frames] -- frame terakhir route
+                notify("Loop Teleport", "Teleport ke CP "..idx, 2)
+                task.wait(teleportDelay)
+            end
+
+            notify("Loop Teleport", "Selesai!", 3)
+        end)
+    end
+})
 SettingsTab:Slider({
     Title = "WalkSpeed",
     Icon = "lucide:zap",
@@ -912,6 +661,7 @@ SettingsTab:Button({
     Title = "Respawn Player",
     Icon = "lucide:user-minus",
     Desc = "Respawn karakter saat ini",
+    Icon = "lucide:refresh-ccw", -- opsional, pakai icon dari Packs
     Callback = function()
         respawnPlayer()
     end
@@ -988,9 +738,6 @@ SettingsTab:Button({
     end
 })
 
--- ============================================================
--- INFO TAB
--- ============================================================
 InfoTab:Button({
     Title = "Copy Discord",
     Icon = "geist:logo-discord",
@@ -1005,6 +752,7 @@ InfoTab:Button({
     end
 })
 
+-- Info Tab
 InfoTab:Section({
     Title = "INFO SC",
     TextSize = 20,
@@ -1018,29 +766,86 @@ Replay/route system untuk checkpoint.
 - Run CPx → CPy = jalur spesifik
 - Playback Speed = atur kecepatan replay (0.25x - 3.00x)
 
-✨ Fitur Baru V1.2.0:
-• Walk to Start Position - Jalan ke posisi awal, bukan teleport
-• Auto CP Detector - Deteksi checkpoint otomatis saat replay
-• CP Beam Visual - Garis arah ke checkpoint terdekat
-• Smart Distance Check - Skip walking jika jarak < 5 studs
-• Timeout Protection - Max 30 detik untuk reach position
-
-Tab Automation:
-• Auto Detect CP - Toggle deteksi checkpoint
-• CP Beam Visual - Toggle garis visual
-• Delay setelah CP - Atur waktu tunggu (1-60 detik)
-• Jarak Deteksi - Atur radius deteksi (5-100 studs)
-• Keyword CP - Nama BasePart checkpoint
-
 Own bardenss
     ]],
     TextSize = 16,
     TextTransparency = 0.25,
 })
 
--- ============================================================
--- TAMPILAN TAB
--- ============================================================
+-- Topbar custom
+Window:DisableTopbarButtons({
+    "Close",
+})
+
+-- Open button cantik
+Window:EditOpenButton({
+    Title = "BANTAI GUNUNG",
+    Icon = "geist:logo-nuxt",
+    CornerRadius = UDim.new(0,16),
+    StrokeThickness = 2,
+    Color = ColorSequence.new(
+        Color3.fromHex("FF0F7B"), 
+        Color3.fromHex("F89B29")
+    ),
+    OnlyMobile = false,
+    Enabled = true,
+    Draggable = true,
+})
+
+-- Tambah tag
+Window:Tag({
+    Title = "V1.0.1",
+    Color = Color3.fromHex("#30ff6a"),
+    Radius = 10,
+})
+
+-- Tag Jam
+local TimeTag = Window:Tag({
+    Title = "--:--:--",
+    Icon = "lucide:timer",
+    Radius = 10,
+    Color = WindUI:Gradient({
+        ["0"]   = { Color = Color3.fromHex("#FF0F7B"), Transparency = 0 },
+        ["100"] = { Color = Color3.fromHex("#F89B29"), Transparency = 0 },
+    }, {
+        Rotation = 45,
+    }),
+})
+
+local hue = 0
+
+-- Rainbow + Jam Real-time
+task.spawn(function()
+	while true do
+		-- Ambil waktu sekarang
+		local now = os.date("*t")
+		local hours   = string.format("%02d", now.hour)
+		local minutes = string.format("%02d", now.min)
+		local seconds = string.format("%02d", now.sec)
+
+		-- Update warna rainbow
+		hue = (hue + 0.01) % 1
+		local color = Color3.fromHSV(hue, 1, 1)
+
+		-- Update judul tag jadi jam lengkap
+		TimeTag:SetTitle(hours .. ":" .. minutes .. ":" .. seconds)
+
+		-- Kalau mau rainbow berjalan, aktifkan ini:
+		TimeTag:SetColor(color)
+
+		task.wait(0.06) -- refresh cepat
+	end
+end)
+
+Window:CreateTopbarButton("theme-switcher", "moon", function()
+    WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "Light" or "Dark")
+    WindUI:Notify({
+        Title = "Theme Changed",
+        Content = "Current theme: "..WindUI:GetCurrentTheme(),
+        Duration = 2
+    })
+end, 990)
+
 tampTab:Paragraph({
     Title = "Customize Interface",
     Desc = "Personalize your experience",
@@ -1111,6 +916,7 @@ WindUI:OnThemeChange(function(theme)
     canchangetheme = true
 end)
 
+
 tampTab:Button({
     Title = "Create New Theme",
     Icon = "plus",
@@ -1128,77 +934,8 @@ tampTab:Button({
     end
 })
 
--- ============================================================
--- WINDOW CONFIGURATION
--- ============================================================
-Window:DisableTopbarButtons({
-    "Close",
-})
-
-Window:EditOpenButton({
-    Title = "BANTAI GUNUNG",
-    Icon = "geist:logo-nuxt",
-    CornerRadius = UDim.new(0,16),
-    StrokeThickness = 2,
-    Color = ColorSequence.new(
-        Color3.fromHex("FF0F7B"), 
-        Color3.fromHex("F89B29")
-    ),
-    OnlyMobile = false,
-    Enabled = true,
-    Draggable = true,
-})
-
-Window:Tag({
-    Title = "V1.2.0",
-    Color = Color3.fromHex("#30ff6a"),
-    Radius = 10,
-})
-
-local TimeTag = Window:Tag({
-    Title = "--:--:--",
-    Icon = "lucide:timer",
-    Radius = 10,
-    Color = WindUI:Gradient({
-        ["0"]   = { Color = Color3.fromHex("#FF0F7B"), Transparency = 0 },
-        ["100"] = { Color = Color3.fromHex("#F89B29"), Transparency = 0 },
-    }, {
-        Rotation = 45,
-    }),
-})
-
-local hue = 0
-
-task.spawn(function()
-	while true do
-		local now = os.date("*t")
-		local hours   = string.format("%02d", now.hour)
-		local minutes = string.format("%02d", now.min)
-		local seconds = string.format("%02d", now.sec)
-
-		hue = (hue + 0.01) % 1
-		local color = Color3.fromHSV(hue, 1, 1)
-
-		TimeTag:SetTitle(hours .. ":" .. minutes .. ":" .. seconds)
-		TimeTag:SetColor(color)
-
-		task.wait(0.06)
-	end
-end)
-
-Window:CreateTopbarButton("theme-switcher", "moon", function()
-    WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "Light" or "Dark")
-    WindUI:Notify({
-        Title = "Theme Changed",
-        Content = "Current theme: "..WindUI:GetCurrentTheme(),
-        Duration = 2
-    })
-end, 990)
-
--- ============================================================
--- FINAL NOTIFICATION & WINDOW SHOW
--- ============================================================
-notify("BANTAI GUNUNG", "Script V1.2.0 sudah di load dengan CP Detector! 🎯", 4)
+-- Final notif
+notify("BANTAI GUNUNG", "Script sudan di load, gunakan dengan bijak.", 3)
 
 pcall(function()
     Window:Show()
