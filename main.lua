@@ -15,7 +15,7 @@ local GITHUB_VIP_URL = "https://raw.githubusercontent.com/syannnho/Astrion/refs/
 
 -- Map Scripts
 local MAP_SCRIPTS = {
-    Pargoy = "https://raw.githubusercontent.com/yourusername/maps/main/pargoy.lua"
+    Pargoy = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/PARGOY/main.lua"
 }
 
 -- Key validation endpoint
