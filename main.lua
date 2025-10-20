@@ -1,5 +1,5 @@
 
--- VIP Loader System - FULL CODE WITH 24H KEY EXPIRY + LOCAL STORAGE + COUNTDOWN + LIFETIME VIP
+-- VIP Loader System - FULL CODE WITH 24H KEY EXPIRY + LOCAL STORAGE + COUNTDOWN + LIFETIME VIP + AUTO VIP UPGRADE
 -- Connected to: https://astrion-keycrate.vercel.app/api/validate
 
 local Players = game:GetService("Players")
@@ -52,6 +52,10 @@ local function saveVIPData(key)
         activatedAt = os.time()
     }
     writefile(VIP_STORAGE_FILE, HttpService:JSONEncode(data))
+    -- Delete regular key file if exists
+    if isfile(STORAGE_FILE) then
+        delfile(STORAGE_FILE)
+    end
     print("✅ VIP Key saved - Lifetime Access")
 end
 
@@ -265,6 +269,28 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     Avatar.Parent = AvatarFrame
     Instance.new("UICorner", Avatar).CornerRadius = UDim.new(0.25, 0)
 
+    -- VIP Badge Icon (top left of avatar)
+    local VIPBadge = Instance.new("Frame")
+    VIPBadge.Size = UDim2.new(0, isMobile() and 28 or 40, 0, isMobile() and 28 or 40)
+    VIPBadge.Position = UDim2.new(0, isMobile() and -10 or -15, 0, isMobile() and -10 or -15)
+    VIPBadge.BackgroundColor3 = Color3.fromRGB(10, 15, 35)
+    VIPBadge.BorderSizePixel = 0
+    VIPBadge.Visible = isVIP or hasVIPKey
+    VIPBadge.Parent = AvatarFrame
+    Instance.new("UICorner", VIPBadge).CornerRadius = UDim.new(0.5, 0)
+    
+    local vipBadgeStroke = Instance.new("UIStroke", VIPBadge)
+    vipBadgeStroke.Color = Color3.fromRGB(255, 215, 0)
+    vipBadgeStroke.Thickness = 2
+
+    local VIPIcon = Instance.new("TextLabel")
+    VIPIcon.Size = UDim2.new(1, 0, 1, 0)
+    VIPIcon.BackgroundTransparency = 1
+    VIPIcon.Text = "✨"
+    VIPIcon.TextSize = isMobile() and 18 or 24
+    VIPIcon.Font = Enum.Font.GothamBold
+    VIPIcon.Parent = VIPBadge
+
     -- Username
     local Username = Instance.new("TextLabel")
     Username.Size = UDim2.new(1, -20, 0, isMobile() and 25 or 30)
@@ -290,40 +316,41 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
 
     -- Status Badge (VIP or Time-based)
     local StatusBadge = Instance.new("Frame")
-    StatusBadge.Size = UDim2.new(0.8, 0, 0, isMobile() and 50 or 60)
-    StatusBadge.Position = UDim2.new(0.5, 0, 0, isMobile() and 165 or 235)
+    StatusBadge.Size = UDim2.new(0.85, 0, 0, isMobile() and 55 or 65)
+    StatusBadge.Position = UDim2.new(0.5, 0, 0, isMobile() and 168 or 238)
     StatusBadge.AnchorPoint = Vector2.new(0.5, 0)
     StatusBadge.BackgroundColor3 = (isVIP or hasVIPKey) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(26, 32, 58)
     StatusBadge.BackgroundTransparency = (isVIP or hasVIPKey) and 0.85 or 0.5
     StatusBadge.BorderSizePixel = 0
     StatusBadge.Parent = LeftPanel
-    Instance.new("UICorner", StatusBadge).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", StatusBadge).CornerRadius = UDim.new(0, 10)
     
     local badgeStroke = Instance.new("UIStroke", StatusBadge)
     badgeStroke.Color = (isVIP or hasVIPKey) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(93, 173, 226)
     badgeStroke.Transparency = 0.5
+    badgeStroke.Thickness = 2
 
     -- Countdown icon/label
     local CountdownIcon = Instance.new("TextLabel")
-    CountdownIcon.Size = UDim2.new(1, -10, 0, isMobile() and 18 or 22)
+    CountdownIcon.Size = UDim2.new(1, -10, 0, isMobile() and 20 or 24)
     CountdownIcon.Position = UDim2.new(0.5, 0, 0, 5)
     CountdownIcon.AnchorPoint = Vector2.new(0.5, 0)
     CountdownIcon.BackgroundTransparency = 1
     CountdownIcon.Text = (isVIP or hasVIPKey) and "👑 VIP Status" or "⏱️ Key Expires In:"
     CountdownIcon.TextColor3 = (isVIP or hasVIPKey) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(160, 174, 192)
-    CountdownIcon.TextSize = isMobile() and 8 or 10
+    CountdownIcon.TextSize = isMobile() and 9 or 11
     CountdownIcon.Font = Enum.Font.GothamBold
     CountdownIcon.Parent = StatusBadge
 
     -- Countdown Timer / VIP Label
     local CountdownLabel = Instance.new("TextLabel")
-    CountdownLabel.Size = UDim2.new(1, -10, 0, isMobile() and 25 or 30)
-    CountdownLabel.Position = UDim2.new(0.5, 0, 0, isMobile() and 23 or 27)
+    CountdownLabel.Size = UDim2.new(1, -10, 0, isMobile() and 26 or 32)
+    CountdownLabel.Position = UDim2.new(0.5, 0, 0, isMobile() and 25 or 29)
     CountdownLabel.AnchorPoint = Vector2.new(0.5, 0)
     CountdownLabel.BackgroundTransparency = 1
     CountdownLabel.Text = (isVIP or hasVIPKey) and "LIFETIME" or ""
     CountdownLabel.TextColor3 = (isVIP or hasVIPKey) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(46, 204, 113)
-    CountdownLabel.TextSize = isMobile() and 13 or 16
+    CountdownLabel.TextSize = isMobile() and 14 or 18
     CountdownLabel.Font = Enum.Font.GothamBold
     CountdownLabel.Parent = StatusBadge
 
@@ -540,7 +567,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     PargoyText.Font = Enum.Font.GothamBold
     PargoyText.Parent = PargoyButton
 
-    return ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, ArunikaButton, YahayukButton, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge
+    return ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, ArunikaButton, YahayukButton, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge, avatarStroke, VIPBadge, badgeStroke
 end
 
 -- Show status helper
@@ -550,6 +577,57 @@ local function showStatus(label, msg, success)
     label.TextColor3 = success and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
 end
 
+-- Upgrade to VIP visuals
+local function upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
+    -- Update text labels
+    WelcomeText.Text = "WELCOME VIP"
+    Subtitle.Text = "Lifetime Premium Access"
+    CountdownIcon.Text = "👑 VIP Status"
+    CountdownIcon.TextColor3 = Color3.fromRGB(255, 215, 0)
+    CountdownLabel.Text = "LIFETIME"
+    CountdownLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+    
+    -- Animate status badge to gold
+    TweenService:Create(StatusBadge, TweenInfo.new(0.5), {
+        BackgroundColor3 = Color3.fromRGB(255, 215, 0),
+        BackgroundTransparency = 0.85
+    }):Play()
+    
+    TweenService:Create(badgeStroke, TweenInfo.new(0.5), {
+        Color = Color3.fromRGB(255, 215, 0)
+    }):Play()
+    
+    -- Animate avatar border to gold
+    TweenService:Create(avatarStroke, TweenInfo.new(0.5), {
+        Color = Color3.fromRGB(255, 215, 0),
+        Thickness = 3
+    }):Play()
+    
+    -- Show VIP badge with animation
+    VIPBadge.Visible = true
+    VIPBadge.Size = UDim2.new(0, 0, 0, 0)
+    TweenService:Create(VIPBadge, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
+        Size = UDim2.new(0, isMobile() and 28 or 40, 0, isMobile() and 28 or 40)
+    }):Play()
+    
+    print("🎉 Upgraded to VIP - UI updated!")
+end
+
+-- Check if user became VIP (auto upgrade check)
+local function checkVIPUpgrade()
+    local vipIds = fetchVIPIds()
+    local isVIP = isUserVIP(userId, vipIds)
+    local hasVIPKey, vipKey = loadVIPData()
+    
+    if isVIP and not hasVIPKey then
+        -- User is now in VIP list but doesn't have VIP file yet
+        saveVIPData("VIP_ID_" .. userId)
+        return true
+    end
+    
+    return false
+end
+
 -- Load map
 local function loadMap(mapName, gui, blur)
     local url = MAP_SCRIPTS[mapName]
@@ -557,7 +635,8 @@ local function loadMap(mapName, gui, blur)
 
     local main = gui:FindFirstChild("MainFrame")
     if main then
-        TweenService:Create(main, TweenInfo.new(0.5), { Size = UDim2.new(0, 0, 0, 0),
+        TweenService:Create(main, TweenInfo.new(0.5), {
+            Size = UDim2.new(0, 0, 0, 0),
             BackgroundTransparency = 1
         }):Play()
     end
@@ -590,7 +669,24 @@ local function main()
         print("✅ Key valid until: " .. getExpiryTimeString(expireTime))
     end
 
-    local ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, ArunikaButton, YahayukButton, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge = createLoader(isVIP, hasVIPKey, LocalPlayer.Name, expireTime)
+    local ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, ArunikaButton, YahayukButton, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge, avatarStroke, VIPBadge, badgeStroke = createLoader(isVIP, hasVIPKey, LocalPlayer.Name, expireTime)
+
+    -- Auto VIP upgrade checker (runs every 30 seconds)
+    local vipCheckConnection
+    if not isLifetimeAccess and keyValid then
+        vipCheckConnection = task.spawn(function()
+            while true do
+                task.wait(30) -- Check every 30 seconds
+                if checkVIPUpgrade() then
+                    upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
+                    if countdownConnection then
+                        countdownConnection:Disconnect()
+                    end
+                    break
+                end
+            end
+        end)
+    end
 
     -- Countdown update loop (only for non-VIP users with time-based keys)
     local countdownConnection
@@ -605,20 +701,26 @@ local function main()
                     CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60) -- Red
                     StatusBadge.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
                     StatusBadge.BackgroundTransparency = 0.85
+                    badgeStroke.Color = Color3.fromRGB(231, 76, 60)
                 elseif timeRemaining <= 10800 then -- Less than 3 hours
                     CountdownLabel.TextColor3 = Color3.fromRGB(230, 126, 34) -- Orange
                     StatusBadge.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
                     StatusBadge.BackgroundTransparency = 0.85
+                    badgeStroke.Color = Color3.fromRGB(230, 126, 34)
                 else
                     CountdownLabel.TextColor3 = Color3.fromRGB(46, 204, 113) -- Green
                     StatusBadge.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
                     StatusBadge.BackgroundTransparency = 0.85
+                    badgeStroke.Color = Color3.fromRGB(93, 173, 226)
                 end
             else
                 CountdownLabel.Text = "EXPIRED"
                 CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
                 if countdownConnection then
                     countdownConnection:Disconnect()
+                end
+                if vipCheckConnection then
+                    task.cancel(vipCheckConnection)
                 end
                 -- Force user to re-authenticate
                 deleteKeyData()
@@ -667,18 +769,15 @@ local function main()
                     showStatus(StatusText, "✓ VIP Access Granted!\nLifetime Access", true)
                     task.wait(1.5)
                     
-                    -- Update UI to VIP status
-                    WelcomeText.Text = "WELCOME VIP"
-                    Subtitle.Text = "Lifetime Premium Access"
-                    CountdownIcon.Text = "👑 VIP Status"
-                    CountdownLabel.Text = "LIFETIME"
-                    CountdownLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
-                    StatusBadge.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
-                    StatusBadge.BackgroundTransparency = 0.85
+                    -- Upgrade UI to VIP
+                    upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
                     
-                    local badgeStroke = StatusBadge:FindFirstChildOfClass("UIStroke")
-                    if badgeStroke then
-                        badgeStroke.Color = Color3.fromRGB(255, 215, 0)
+                    -- Stop countdown if running
+                    if countdownConnection then
+                        countdownConnection:Disconnect()
+                    end
+                    if vipCheckConnection then
+                        task.cancel(vipCheckConnection)
                     end
                 else
                     -- Regular Key - 24 Hour Access
@@ -694,24 +793,44 @@ local function main()
                         countdownConnection:Disconnect()
                     end
                     
+                    -- Start VIP check loop
+                    if vipCheckConnection then
+                        task.cancel(vipCheckConnection)
+                    end
+                    vipCheckConnection = task.spawn(function()
+                        while true do
+                            task.wait(30)
+                            if checkVIPUpgrade() then
+                                upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
+                                if countdownConnection then
+                                    countdownConnection:Disconnect()
+                                end
+                                break
+                            end
+                        end
+                    end)
+                    
                     countdownConnection = game:GetService("RunService").Heartbeat:Connect(function()
                         local timeRemaining = newExpireTime - os.time()
                         if timeRemaining > 0 then
                             CountdownLabel.Text = formatTimeRemaining(timeRemaining)
                             
                             -- Color changes based on time
-                            if timeRemaining <= 3600 then -- Less than 1 hour
-                                CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60) -- Red
+                            if timeRemaining <= 3600 then
+                                CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
                                 StatusBadge.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
                                 StatusBadge.BackgroundTransparency = 0.85
-                            elseif timeRemaining <= 10800 then -- Less than 3 hours
-                                CountdownLabel.TextColor3 = Color3.fromRGB(230, 126, 34) -- Orange
+                                badgeStroke.Color = Color3.fromRGB(231, 76, 60)
+                            elseif timeRemaining <= 10800 then
+                                CountdownLabel.TextColor3 = Color3.fromRGB(230, 126, 34)
                                 StatusBadge.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
                                 StatusBadge.BackgroundTransparency = 0.85
+                                badgeStroke.Color = Color3.fromRGB(230, 126, 34)
                             else
-                                CountdownLabel.TextColor3 = Color3.fromRGB(46, 204, 113) -- Green
+                                CountdownLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
                                 StatusBadge.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
                                 StatusBadge.BackgroundTransparency = 0.85
+                                badgeStroke.Color = Color3.fromRGB(93, 173, 226)
                             end
                         else
                             CountdownLabel.Text = "EXPIRED"
@@ -719,11 +838,14 @@ local function main()
                             if countdownConnection then
                                 countdownConnection:Disconnect()
                             end
+                            if vipCheckConnection then
+                                task.cancel(vipCheckConnection)
+                            end
                             deleteKeyData()
                             task.wait(2)
                             if ScreenGui then ScreenGui:Destroy() end
                             if BlurEffect then BlurEffect:Destroy() end
-                            main() -- Restart
+                            main()
                         end
                     end)
                 end
@@ -743,6 +865,9 @@ local function main()
         if countdownConnection then
             countdownConnection:Disconnect()
         end
+        if vipCheckConnection then
+            task.cancel(vipCheckConnection)
+        end
         loadMap("Arunika", ScreenGui, BlurEffect) 
     end)
     
@@ -750,12 +875,18 @@ local function main()
         if countdownConnection then
             countdownConnection:Disconnect()
         end
+        if vipCheckConnection then
+            task.cancel(vipCheckConnection)
+        end
         loadMap("Yahayuk", ScreenGui, BlurEffect) 
     end)
     
     PargoyButton.MouseButton1Click:Connect(function() 
         if countdownConnection then
             countdownConnection:Disconnect()
+        end
+        if vipCheckConnection then
+            task.cancel(vipCheckConnection)
         end
         loadMap("Pargoy", ScreenGui, BlurEffect) 
     end)
@@ -794,11 +925,15 @@ local function main()
         if countdownConnection then
             countdownConnection:Disconnect()
         end
+        if vipCheckConnection then
+            task.cancel(vipCheckConnection)
+        end
     end)
 end
 
 -- Run
 main()
-print("✅ VIP Loader v9.0 - Lifetime VIP System | Device:", isMobile() and "Mobile" or "Desktop")
+print("✅ VIP Loader v10.0 - Auto VIP Upgrade System | Device:", isMobile() and "Mobile" or "Desktop")
 print("📁 Storage location: " .. STORAGE_FOLDER)
 print("👑 VIP keys grant lifetime access - Regular keys last 24 hours")
+print("🔄 Auto VIP upgrade check every 30 seconds")
