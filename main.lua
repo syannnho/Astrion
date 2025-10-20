@@ -14,7 +14,7 @@ local GITHUB_VIP_URL = "https://raw.githubusercontent.com/yourusername/vip/main/
 
 -- Map Scripts
 local MAP_SCRIPTS = {
-    Pargoy = ""
+    Pargoy = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/PARGOY/main.lua"
 }
 -- Key validation endpoint
 local KEY_VALIDATE_URL = "https://astrion-keycrate.vercel.app/api/validate"
@@ -323,7 +323,7 @@ local function createLoader(isVIP, playerName)
     ArunikaText.Size = UDim2.new(1, 0, 0, isMobile() and 25 or 30)
     ArunikaText.Position = UDim2.new(0, 0, 1, isMobile() and -30 or -35)
     ArunikaText.BackgroundTransparency = 1
-    ArunikaText.Text = "ARUNIKA"
+    ArunikaText.Text = "PARGOY"
     ArunikaText.TextColor3 = Color3.fromRGB(255, 255, 255)
     ArunikaText.TextSize = isMobile() and 11 or 14
     ArunikaText.Font = Enum.Font.GothamBold
