@@ -419,9 +419,8 @@ local function main()
     end)
 
     -- Map buttons
-    ArunikaButton.MouseButton1Click:Connect(function() loadMap("Arunika", ScreenGui, BlurEffect) end)
-    YahayukButton.MouseButton1Click:Connect(function() loadMap("Yahayuk", ScreenGui, BlurEffect) end)
-
+    ArunikaButton.MouseButton1Click:Connect(function() loadMap("Pargoy", ScreenGui, BlurEffect) end)
+    
     -- Hover effects
     local function hover(btn)
         local origTrans = btn.BackgroundTransparency
