@@ -1,23 +1,15 @@
---=== Guards (Auto Reload Friendly - Safe Version) ===
-if _G.__AWM_FULL_LOADED and _G.__AWM_FULL_LOADED.Active then
-    for _,v in pairs(game:GetService("CoreGui"):GetChildren()) do
-        if v.Name == "AutoWalk Mount" then v:Destroy() end
-    end
-    _G.__AWM_NOTIFY = nil
-    _G.__AWM_FULL_LOADED = nil
-    task.wait(0.5)
-end
-_G.__AWM_FULL_LOADED = { Active = true }
-
 -- ============================================================
 -- CORE (fungsi asli + log/notify)
 -- ============================================================
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local PathfindingService = game:GetService("PathfindingService")
-local TeleportService = game:GetService("TeleportService")
 local player = Players.LocalPlayer
 local hrp = nil
+local Packs = {
+    lucide = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/lucide/dist/Icons.lua"))(),
+    craft  = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/craft/dist/Icons.lua"))(),
+    geist  = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Footagesus/Icons/refs/heads/main/geist/dist/Icons.lua"))(),
+}
 
 local function refreshHRP(char)
     if not char then
@@ -34,18 +26,16 @@ local isRunning = false
 local routes = {}
 
 -- ============================================================
--- ROUTE CONFIG (Tinggi default waktu record)
+-- ROUTE CONFIG
 -- ============================================================
 local DEFAULT_HEIGHT = 4.947289
 
--- Ambil tinggi avatar sekarang
 local function getCurrentHeight()
     local char = player.Character or player.CharacterAdded:Wait()
     local humanoid = char:WaitForChild("Humanoid")
     return humanoid.HipHeight + (char:FindFirstChild("Head") and char.Head.Size.Y or 2)
 end
 
--- Adjustment posisi sesuai tinggi avatar
 local function adjustRoute(frames)
     local adjusted = {}
     local currentHeight = getCurrentHeight()
@@ -58,9 +48,6 @@ local function adjustRoute(frames)
     return adjusted
 end
 
--- ============================================================
--- Hapus frame duplikat
--- ============================================================
 local intervalFlip = false
 
 local function removeDuplicateFrames(frames, tolerance)
@@ -83,9 +70,6 @@ local function removeDuplicateFrames(frames, tolerance)
     return newFrames
 end
 
--- ============================================================
--- Apply interval flip
--- ============================================================
 local function applyIntervalRotation(cf)
     if intervalFlip then
         local pos = cf.Position
@@ -97,9 +81,6 @@ local function applyIntervalRotation(cf)
     end
 end
 
--- ============================================================
--- Load route dengan auto adjust + hapus duplikat
--- ============================================================
 local function loadRoute(url)
     local ok, result = pcall(function()
         return loadstring(game:HttpGet(url))()
@@ -113,31 +94,9 @@ local function loadRoute(url)
     end
 end
 
--- HANYA 1 MAP - Ubah URL sesuai kebutuhan
 routes = {
-    {"BASE → CP8", loadRoute("https://raw.githubusercontent.com/yrejinhoo/Replays/refs/heads/main/PARGOY/V2/PARGOY.lua")},
+    {"BASE → CP8", loadRoute("https://raw.githubusercontent.com/Bardenss/YAHAYUK/refs/heads/main/cadangan.lua")},
 }
-
--- ============================================================
--- CP DETECTOR GLOBALS
--- ============================================================
-local autoCPEnabled = false
-local cpKeyword = "cp"
-local cpDetectRadius = 15
-local cpDelayAfterDetect = 25
-local cachedCPs = {}
-local lastCPScan = 0
-local CP_SCAN_INTERVAL = 5
-local triggeredCP = {}
-local completedCPs = {}
-local CP_RADIUS = cpDetectRadius
-local CP_COOLDOWN = cpDelayAfterDetect
-local lastReplayIndex = 1
-local lastReplayPos = nil
-local lastUsedKeyword = nil
-local cpHighlight = nil
-local cpBeamEnabled = true
-local awaitingCP = false
 
 -- ============================================================
 -- Fungsi bantu & core logic
@@ -185,9 +144,98 @@ local function getNearestFrameIndex(frames)
     return startIdx
 end
 
+local function lerpCF(fromCF, toCF)
+    fromCF = applyIntervalRotation(fromCF)
+    toCF = applyIntervalRotation(toCF)
+
+    local duration = frameTime / math.max(0.05, playbackRate)
+    local t = 0
+    while t < duration do
+        if not isRunning then break end
+        local dt = task.wait()
+        t += dt
+        local alpha = math.min(t / duration, 1)
+        if hrp and hrp.Parent and hrp:IsDescendantOf(workspace) then
+            hrp.CFrame = fromCF:Lerp(toCF, alpha)
+        end
+    end
+end
+
+local notify = function() end
+local function logAndNotify(msg, val)
+    local text = val and (msg .. " " .. tostring(val)) or msg
+    print(text)
+    notify(msg, tostring(val or ""), 3)
+end
+
+-- === VAR BYPASS ===
+local bypassActive = false
+local bypassConn
+
+local function setupBypass(char)
+    local humanoid = char:WaitForChild("Humanoid")
+    local hrp = char:WaitForChild("HumanoidRootPart")
+    local lastPos = hrp.Position
+
+    if bypassConn then bypassConn:Disconnect() end
+    bypassConn = RunService.RenderStepped:Connect(function()
+        if not hrp or not hrp.Parent then return end
+        if bypassActive then
+            local direction = (hrp.Position - lastPos)
+            local dist = direction.Magnitude
+
+            local yDiff = hrp.Position.Y - lastPos.Y
+            if yDiff > 0.5 then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            elseif yDiff < -1 then
+                humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+            end
+
+            if dist > 0.01 then
+                local moveVector = direction.Unit * math.clamp(dist * 5, 0, 1)
+                humanoid:Move(moveVector, false)
+            else
+                humanoid:Move(Vector3.zero, false)
+            end
+        end
+        lastPos = hrp.Position
+    end)
+end
+
+player.CharacterAdded:Connect(setupBypass)
+if player.Character then setupBypass(player.Character) end
+
+local function setBypass(state)
+    bypassActive = state
+    notify("Bypass Animasi", state and "✅ Aktif" or "❌ Nonaktif", 2)
+end
+
+-- ============================================================
+-- CP DETECTOR GLOBALS
+-- ============================================================
+local autoCPEnabled = false
+local cpKeyword = "cp"
+local cpDetectRadius = 15
+local cpDelayAfterDetect = 25
+local cachedCPs = {}
+local lastCPScan = 0
+local CP_SCAN_INTERVAL = 5
+local triggeredCP = {}
+local completedCPs = {}
+local CP_RADIUS = cpDetectRadius
+local CP_COOLDOWN = cpDelayAfterDetect
+local lastReplayIndex = 1
+local lastReplayPos = nil
+local lastUsedKeyword = nil
+local cpHighlight = nil
+local cpBeamEnabled = true
+local awaitingCP = false
+
 -- ============================================================
 -- Pathfinding helper
 -- ============================================================
+local PathfindingService = game:GetService("PathfindingService")
+
 local function walkTo(targetPos)
     local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
     if not humanoid or not hrp then return end
@@ -221,14 +269,12 @@ local function handleCP(cp)
 
     if reached then
         completedCPs[cp] = true
-        if _G.__AWM_NOTIFY then
-            _G.__AWM_NOTIFY("CP Detector", string.format("CP '%s' disentuh, menunggu %ds...", cp.Name, cpDelayAfterDetect), 2)
-        end
+        notify("CP Detector", string.format("CP '%s' disentuh, menunggu %ds...", cp.Name, cpDelayAfterDetect), 2)
         task.wait(cpDelayAfterDetect)
     end
 
     if lastReplayPos then walkTo(lastReplayPos) end
-    if _G.__AWM_NOTIFY then _G.__AWM_NOTIFY("CP Detector", "Kembali ke lintasan, lanjut replay...", 2) end
+    notify("CP Detector", "Kembali ke lintasan, lanjut replay...", 2)
     task.wait(0.2)
     awaitingCP = false
 end
@@ -304,75 +350,6 @@ local function findNearestCP(radius, keyword)
 end
 
 -- ============================================================
--- Lerp CF
--- ============================================================
-local function lerpCF(fromCF, toCF)
-    fromCF = applyIntervalRotation(fromCF)
-    toCF = applyIntervalRotation(toCF)
-
-    local duration = frameTime / math.max(0.05, playbackRate)
-    local t = 0
-    while t < duration and isRunning do
-        local dt = task.wait()
-        t += dt
-        local alpha = math.min(t / duration, 1)
-        if hrp and hrp.Parent and hrp:IsDescendantOf(workspace) then
-            hrp.CFrame = fromCF:Lerp(toCF, alpha)
-        end
-    end
-end
-
--- notify placeholder
-local notify = function() end
-local function logAndNotify(msg, val)
-    local text = val and (msg .. " " .. tostring(val)) or msg
-    print(text)
-    notify(msg, tostring(val or ""), 3)
-end
-
--- === VAR BYPASS ===
-local bypassActive = false
-local bypassConn
-
-local function setupBypass(char)
-    local humanoid = char:WaitForChild("Humanoid")
-    local hrp = char:WaitForChild("HumanoidRootPart")
-    local lastPos = hrp.Position
-
-    if bypassConn then bypassConn:Disconnect() end
-    bypassConn = RunService.RenderStepped:Connect(function()
-        if not hrp or not hrp.Parent then return end
-        if bypassActive then
-            local direction = (hrp.Position - lastPos)
-            local dist = direction.Magnitude
-
-            local yDiff = hrp.Position.Y - lastPos.Y
-            if yDiff > 0.5 then
-                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            elseif yDiff < -1 then
-                humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
-            end
-
-            if dist > 0.01 then
-                local moveVector = direction.Unit * math.clamp(dist * 5, 0, 1)
-                humanoid:Move(moveVector, false)
-            else
-                humanoid:Move(Vector3.zero, false)
-            end
-        end
-        lastPos = hrp.Position
-    end)
-end
-
-player.CharacterAdded:Connect(setupBypass)
-if player.Character then setupBypass(player.Character) end
-
-local function setBypass(state)
-    bypassActive = state
-    notify("Bypass Animasi", state and "✅ Aktif" or "❌ Nonaktif", 2)
-end
-
--- ============================================================
 -- Walk to Start Position Function
 -- ============================================================
 local function walkToStartPosition(targetPos)
@@ -387,11 +364,10 @@ local function walkToStartPosition(targetPos)
     local distance = (targetPos - currentPos).Magnitude
     
     if distance > 5 then
-        notify("Auto Walk", "Berjalan ke titik awal replay...", 2)
+        notify("Auto Walk", "🚶 Berjalan ke titik awal replay...", 2)
         
         humanoid:MoveTo(targetPos)
         
-        -- Wait until character reaches position or timeout 30 seconds
         local startTime = tick()
         local reachedPosition = false
         
@@ -401,6 +377,7 @@ local function walkToStartPosition(targetPos)
             local currentDist = (hrp.Position - targetPos).Magnitude
             if currentDist < 5 then
                 reachedPosition = true
+                notify("Auto Walk", "✅ Sampai di posisi awal!", 1)
                 break
             end
             
@@ -436,7 +413,7 @@ local function runRouteOnce()
         return 
     end
 
-    -- Walk to start position instead of teleporting
+    -- Walk to start position
     local startFrame = frames[1]
     if startFrame then
         walkToStartPosition(startFrame.Position)
@@ -448,15 +425,14 @@ local function runRouteOnce()
         lastReplayIndex = i
         lastReplayPos = frames[i].Position
 
+        -- Auto CP Detection
         if autoCPEnabled then
             CP_RADIUS = cpDetectRadius
             CP_COOLDOWN = cpDelayAfterDetect
             local cp = findNearestCP(CP_RADIUS, cpKeyword)
             if cp then
                 triggeredCP[cp] = tick()
-                if _G.__AWM_NOTIFY then
-                    _G.__AWM_NOTIFY("CP Detector","CP terdekat terdeteksi. Menuju CP...",2)
-                end
+                notify("CP Detector", "CP terdekat terdeteksi. Menuju CP...", 2)
                 handleCP(cp)
             end
         end
@@ -466,9 +442,6 @@ local function runRouteOnce()
 
     isRunning = false
     setBypass(false)
-    if _G.__AWM_NOTIFY then
-        _G.__AWM_NOTIFY("Replay","Replay selesai.",2)
-    end
 end
 
 local function runAllRoutes()
@@ -500,15 +473,14 @@ local function runAllRoutes()
                 lastReplayIndex = i
                 lastReplayPos = frames[i].Position
 
+                -- Auto CP Detection
                 if autoCPEnabled then
                     CP_RADIUS = cpDetectRadius
                     CP_COOLDOWN = cpDelayAfterDetect
                     local cp = findNearestCP(CP_RADIUS, cpKeyword)
                     if cp then
                         triggeredCP[cp] = tick()
-                        if _G.__AWM_NOTIFY then
-                            _G.__AWM_NOTIFY("CP Detector","CP terdekat terdeteksi. Menuju CP...",2)
-                        end
+                        notify("CP Detector", "CP terdekat terdeteksi. Menuju CP...", 2)
                         handleCP(cp)
                     end
                 end
@@ -529,7 +501,9 @@ local function stopRoute()
     if isRunning then
         logAndNotify("Stop route", "Semua route dihentikan!")
     end
+
     isRunning = false
+
     if bypassActive then
         bypassActive = false
         notify("Bypass Animasi", "❌ Nonaktif", 2)
@@ -561,15 +535,14 @@ local function runSpecificRoute(routeIdx)
         lastReplayIndex = i
         lastReplayPos = frames[i].Position
 
+        -- Auto CP Detection
         if autoCPEnabled then
             CP_RADIUS = cpDetectRadius
             CP_COOLDOWN = cpDelayAfterDetect
             local cp = findNearestCP(CP_RADIUS, cpKeyword)
             if cp then
                 triggeredCP[cp] = tick()
-                if _G.__AWM_NOTIFY then
-                    _G.__AWM_NOTIFY("CP Detector","CP terdekat terdeteksi. Menuju CP...",2)
-                end
+                notify("CP Detector", "CP terdekat terdeteksi. Menuju CP...", 2)
                 handleCP(cp)
             end
         end
@@ -578,9 +551,6 @@ local function runSpecificRoute(routeIdx)
     end
     isRunning = false
     setBypass(false)
-    if _G.__AWM_NOTIFY then
-        _G.__AWM_NOTIFY("Replay","Replay selesai.",2)
-    end
 end
 
 -- ===============================
@@ -619,29 +589,44 @@ end
 -- UI: WindUI
 -- ============================================================
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-local avatarUrl = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=420&height=420&format=png", player.UserId)
 
 local Window = WindUI:CreateWindow({
-    Title = "AutoWalk Mount",
-    Icon = "lucide:play",
-    Author = "You",
-    Folder = "AutoWalkMount",
-    Size = UDim2.fromOffset(720, 560),
+    Title = "BANTAI GUNUNG",
+    Icon = "lucide:mountain-snow",
+    Author = "bardenss",
+    Folder = "BRDNHub",
+    Size = UDim2.fromOffset(580, 460),
     Theme = "Midnight",
+    Resizable = true,
     SideBarWidth = 200,
-    Watermark = "AutoWalk",
-    User = { Enabled = true, Anonymous = false, Image = avatarUrl, Username = player.DisplayName }
+    Watermark = "bardenss",
+    User = {
+        Enabled = true,
+        Anonymous = false,
+        Callback = function()
+            WindUI:Notify({
+                Title = "User Profile",
+                Content = "User profile clicked!",
+                Duration = 3
+            })
+        end
+    }
 })
 
 notify = function(title, content, duration)
     pcall(function()
-        WindUI:Notify({ Title = title, Content = content or "", Duration = duration or 3, Icon = "bell" })
+        WindUI:Notify({
+            Title = title,
+            Content = content or "",
+            Duration = duration or 3,
+            Icon = "bell",
+        })
     end)
 end
-_G.__AWM_NOTIFY = notify
 
 local function enableAntiIdle()
     if antiIdleConn then antiIdleConn:Disconnect() end
+    local player = Players.LocalPlayer
     antiIdleConn = player.Idled:Connect(function()
         if antiIdleActive then
             VirtualUser:CaptureController()
@@ -653,510 +638,456 @@ end
 
 enableAntiIdle()
 
---=== Launcher ===
-local Launcher = Window:Tab({ Title = "Launcher", Icon = "lucide:rocket", Default = true })
-Launcher:Section({ Title = "Mulai GUI" })
-local __MAIN_BUILT = false
+local MainTab = Window:Tab({
+    Title = "Main",
+    Icon = "geist:shareplay",
+    Default = true
+})
+local AutomationTab = Window:Tab({
+    Title = "Automation",
+    Icon = "lucide:refresh-cw"
+})
+local SettingsTab = Window:Tab({
+    Title = "Tools",
+    Icon = "geist:settings-sliders",
+})
+local tampTab = Window:Tab({
+    Title = "Tampilan",
+    Icon = "lucide:app-window",
+})
+local InfoTab = Window:Tab({
+    Title = "Info",
+    Icon = "lucide:info",
+})
 
-Launcher:Button({
-    Title = "▶ Run GUI (load semua fitur)",
-    Icon  = "lucide:play-circle",
-    Desc  = "Klik untuk memuat tab Main, Automation, Tools, Tampilan",
-    Callback = function()
-        if __MAIN_BUILT then
-            notify("AutoWalk", "GUI sudah dimuat.", 2); return
+-- ============================================================
+-- Main Tab
+-- ============================================================
+local speeds = {}
+for v = 0.25, 3, 0.25 do
+    table.insert(speeds, string.format("%.2fx", v))
+end
+MainTab:Dropdown({
+    Title = "Speed",
+    Icon = "lucide:zap",
+    Values = speeds,
+    Value = "1.00x",
+    Callback = function(option)
+        local num = tonumber(option:match("([%d%.]+)"))
+        if num then
+            playbackRate = num
+            logAndNotify("Speed : ", string.format("%.2fx", playbackRate))
+        else
+            notify("Playback Speed", "Gagal membaca opsi speed!", 3)
         end
-        __MAIN_BUILT = true
-
-        --========================
-        -- TAB: Main
-        --========================
-        local MainTab = Window:Tab({ Title = "Main", Icon = "geist:shareplay" })
-        MainTab:Section({ Title = "Kontrol Replay" })
-
-        MainTab:Button({
-            Title = "▶ START (CP terdekat)",
-            Icon  = "craft:back-to-start-stroke",
-            Desc  = "Mulai dari checkpoint terdekat",
-            Callback = function()
-                if isRunning then notify("Replay","Replay sudah berjalan",2); return end
-                task.spawn(runRouteOnce)
-            end
-        })
-
-        MainTab:Button({
-            Title = "▶ AWAL KE AKHIR",
-            Icon  = "lucide:play",
-            Desc  = "Jalankan semua checkpoint secara loop",
-            Callback = function()
-                if isRunning then notify("Replay","Replay sudah berjalan",2); return end
-                task.spawn(runAllRoutes)
-            end
-        })
-
-        MainTab:Button({
-            Title = "■ STOP",
-            Icon  = "geist:stop-circle",
-            Desc  = "Hentikan replay sekarang",
-            Callback = function()
-                stopRoute()
-            end
-        })
-
-        local speeds = {}
-        for v=0.25,3,0.25 do table.insert(speeds, string.format("%.2fx", v)) end
-        MainTab:Dropdown({
-            Title = "⚡ Playback Speed",
-            Icon = "lucide:zap",
-            Values = speeds, Value = "1.00x",
-            Callback = function(option)
-                local num = tonumber(option:match("([%d%.]+)"))
-                if num then playbackRate = num notify("Playback Speed", string.format("%.2fx", num), 2) end
-            end
-        })
-
-        MainTab:Toggle({
-            Title = "Interval Flip",
-            Icon = "lucide:refresh-ccw",
-            Desc = "ON → Hadap belakang tiap frame",
-            Value = false,
-            Callback = function(state)
-                intervalFlip = state
-                notify("Interval Flip", state and "✅ Aktif" or "❌ Nonaktif", 2)
-            end
-        })
-
-        MainTab:Toggle({
-            Title = "Anti Beton Ultra-Smooth",
-            Icon = "lucide:shield",
-            Desc = "Mencegah jatuh secara kaku saat melayang",
-            Value = false,
-            Callback = function(state)
-                antiBetonActive = state
-                if state then
-                    enableAntiBeton()
-                    notify("Anti Beton", "✅ Aktif (Ultra-Smooth)", 2)
-                else
-                    disableAntiBeton()
-                    notify("Anti Beton", "❌ Nonaktif", 2)
-                end
-            end
-        })
-
-        --========================
-        -- TAB: Automation
-        --========================
-        local AutomationTab = Window:Tab({ Title = "Automation", Icon = "lucide:refresh-cw" })
-        AutomationTab:Section({ Title = "CP Detector" })
-
-        AutomationTab:Toggle({
-            Title = "🔎 Auto Detect CP During Route",
-            Icon  = "lucide:map-pin",
-            Value = false,
-            Desc  = "Pause replay saat mendeteksi BasePart sesuai keyword",
-            Callback = function(state) autoCPEnabled = state notify("CP Detector", state and "Aktif" or "Nonaktif", 2) end
-        })
-
-        AutomationTab:Toggle({
-            Title = "🔦 CP Beam Visual",
-            Icon  = "lucide:lightbulb",
-            Value = cpBeamEnabled,
-            Desc  = "Tampilkan garis arah ke CP terdekat",
-            Callback = function(state)
-                cpBeamEnabled = state
-                notify("CP Beam", state and "Aktif" or "Nonaktif", 2)
-                if not state and cpHighlight then cpHighlight:Destroy() cpHighlight = nil end
-            end
-        })
-
-        AutomationTab:Slider({
-            Title = "⏲️ Delay setelah CP (detik)",
-            Icon  = "lucide:clock",
-            Value = { Min=1, Max=60, Default=cpDelayAfterDetect },
-            Step  = 1, Suffix = "s",
-            Callback = function(val) cpDelayAfterDetect = tonumber(val) or cpDelayAfterDetect notify("CP Detector","Delay: "..tostring(cpDelayAfterDetect).." dtk",2) end
-        })
-
-        AutomationTab:Slider({
-            Title = "📏 Jarak Deteksi CP (studs)",
-            Icon  = "lucide:ruler",
-            Value = { Min=5, Max=100, Default=cpDetectRadius },
-            Step  = 1, Suffix = "studs",
-            Callback = function(val) cpDetectRadius = tonumber(val) or cpDetectRadius notify("CP Detector","Radius: "..tostring(cpDetectRadius).." studs",2) end
-        })
-
-        AutomationTab:Input({
-            Title = "🧩 Keyword BasePart CP",
-            Placeholder = "mis. cp / 14 / pad",
-            Default = cpKeyword,
-            Callback = function(text)
-                if text and text ~= "" then
-                    cpKeyword = text
-                    lastUsedKeyword = nil
-                    notify("CP Detector","Keyword diubah ke: "..text,2)
-                else
-                    notify("CP Detector","Keyword kosong, tetap: "..cpKeyword,2)
-                end
-            end
-        })
-
-        --========================
-        -- TAB: Tools
-        --========================
-        local ToolsTab = Window:Tab({ Title = "Tools", Icon = "geist:settings-sliders" })
-        ToolsTab:Section({ Title = "Utility & Player Tools" })
-
-        ToolsTab:Button({
-            Title = "PRIVATE SERVER",
-            Icon  = "lucide:layers-2",
-            Desc  = "Pindah ke private server",
-            Callback = function()
-                local ok = pcall(function()
-                    loadstring(game:HttpGet("https://raw.githubusercontent.com/Bardenss/PS/refs/heads/main/ps"))()
-                end)
-                if not ok then notify("Private Server","Gagal memuat.",3) end
-            end
-        })
-
-        -- Setup teleport options: BASE + CP1, CP2, dst
-        local teleportOptions = {"BASE"}
-        for idx, _ in ipairs(routes) do
-            table.insert(teleportOptions, "CP "..idx)
-        end
-
-        local delayValues = {}
-        for i = 1, 10 do table.insert(delayValues, tostring(i).."s") end
-        local teleportDelay = 3
-
-        ToolsTab:Dropdown({
-            Title = "Delay Teleport",
-            Icon = "lucide:timer",
-            Values = delayValues,
-            Value = "3s",
-            Callback = function(val)
-                local n = tonumber(val:match("(%d+)"))
-                if n then teleportDelay = n end
-            end
-        })
-
-        ToolsTab:Dropdown({
-            Title = "Teleport ke Checkpoint",
-            Icon = "lucide:map-pin",
-            Values = teleportOptions,
-            SearchBarEnabled = true,
-            Value = teleportOptions[1],
-            Callback = function(selected)
-                local char = player.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                if not hrp then return end
-
-                local targetCF
-                if selected == "BASE" then
-                    targetCF = routes[1][2][1]
-                else
-                    local idx = tonumber(selected:match("%d+"))
-                    if idx and routes[idx] then
-                        local frames = routes[idx][2]
-                        targetCF = frames[#frames]
-                    end
-                end
-
-                if targetCF then
-                    hrp.CFrame = targetCF
-                    notify("Teleport", "Berhasil ke "..selected, 2)
-                else
-                    notify("Teleport", "Gagal teleport!", 2)
-                end
-            end
-        })
-
-        ToolsTab:Button({
-            Title = "Loop Teleport",
-            Icon = "lucide:refresh-ccw",
-            Desc = "Teleport dari BASE sampai CP terakhir sesuai route",
-            Callback = function()
-                local char = player.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                if not hrp then return end
-
-                task.spawn(function()
-                    hrp.CFrame = routes[1][2][1]
-                    notify("Loop Teleport", "Teleport ke BASE", 2)
-                    task.wait(teleportDelay)
-
-                    for idx, _ in ipairs(routes) do
-                        local frames = routes[idx][2]
-                        hrp.CFrame = frames[#frames]
-                        notify("Loop Teleport", "Teleport ke CP "..idx, 2)
-                        task.wait(teleportDelay)
-                    end
-
-                    notify("Loop Teleport", "Selesai!", 3)
-                end)
-            end
-        })
-
-        ToolsTab:Slider({
-            Title = "WalkSpeed",
-            Icon = "lucide:zap",
-            Desc = "Atur kecepatan berjalan karakter",
-            Value = { Min = 10, Max = 500, Default = 16 },
-            Step = 1, Suffix = "Speed",
-            Callback = function(val)
-                local char = player.Character
-                if char and char:FindFirstChild("Humanoid") then
-                    char.Humanoid.WalkSpeed = val
-                end
-            end
-        })
-
-        ToolsTab:Slider({
-            Title = "Jump Height",
-            Icon = "lucide:zap",
-            Desc = "Atur kekuatan lompat karakter",
-            Value = { Min = 10, Max = 500, Default = 50 },
-            Step = 1, Suffix = "Height",
-            Callback = function(val)
-                local char = player.Character
-                if char and char:FindFirstChild("Humanoid") then
-                    char.Humanoid.JumpPower = val
-                end
-            end
-        })
-
-        ToolsTab:Button({
-            Title = "Respawn Player",
-            Icon = "lucide:user-minus",
-            Desc = "Respawn karakter saat ini",
-            Callback = function() respawnPlayer() end
-        })
-
-        ToolsTab:Button({
-            Title = "Speed Coil",
-            Icon = "lucide:zap",
-            Desc = "Tambah Speed Coil ke karakter",
-            Callback = function()
-                local speedValue = 23
-                local function giveCoil(char)
-                    local backpack = player:WaitForChild("Backpack")
-                    if backpack:FindFirstChild("Speed Coil") or char:FindFirstChild("Speed Coil") then return end
-                    local tool = Instance.new("Tool")
-                    tool.Name = "Speed Coil"
-                    tool.RequiresHandle = false
-                    tool.Parent = backpack
-                    tool.Equipped:Connect(function()
-                        local h = char:FindFirstChildOfClass("Humanoid")
-                        if h then h.WalkSpeed = speedValue end
-                    end)
-                    tool.Unequipped:Connect(function()
-                        local h = char:FindFirstChildOfClass("Humanoid")
-                        if h then h.WalkSpeed = 16 end
-                    end)
-                end
-                if player.Character then giveCoil(player.Character) end
-                player.CharacterAdded:Connect(function(char) task.wait(1) giveCoil(char) end)
-            end
-        })
-
-        ToolsTab:Button({
-            Title = "TP Tool",
-            Icon = "lucide:chevrons-up-down",
-            Desc = "Teleport pakai tool",
-            Callback = function()
-                local mouse = player:GetMouse()
-                local tool = Instance.new("Tool")
-                tool.RequiresHandle = false
-                tool.Name = "Teleport"
-                tool.Parent = player.Backpack
-                tool.Activated:Connect(function()
-                    if mouse.Hit then
-                        local c = player.Character
-                        if c and c:FindFirstChild("HumanoidRootPart") then
-                            c.HumanoidRootPart.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0,3,0))
-                        end
-                    end
-                end)
-            end
-        })
-
-        ToolsTab:Button({
-            Title = "Gling GUI",
-            Icon = "lucide:layers-2",
-            Desc = "Load Gling GUI",
-            Callback = function()
-                local ok = pcall(function()
-                    loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Fling-Gui-Op-47914"))()
-                end)
-                if not ok then notify("Gling GUI","Gagal memuat.",3) end
-            end
-        })
-
-        ToolsTab:Button({
-            Title = "Hop Server",
-            Icon = "lucide:refresh-ccw",
-            Desc = "Pindah server lain",
-            Callback = function()
-                local ok, err = pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
-                if not ok then notify("Hop Server","Gagal: "..tostring(err),3) end
-            end
-        })
-
-        ToolsTab:Button({
-            Title = "Rejoin",
-            Icon = "lucide:rotate-cw",
-            Desc = "Masuk ulang server ini",
-            Callback = function()
-                local ok, err = pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player) end)
-                if not ok then notify("Rejoin","Gagal: "..tostring(err),3) end
-            end
-        })
-
-        ToolsTab:Button({
-            Title = "Infinite Yield",
-            Icon = "lucide:terminal",
-            Desc = "Load Infinite Yield Admin",
-            Callback = function() loadstring(game:HttpGet("https://raw.githubusercontent.com/Xane123/InfiniteFun_IY/master/source"))() end
-        })
-
-        ToolsTab:Input({
-            Title = "Atur ketinggian Avatar",
-            Placeholder = "mis. 2.9",
-            Default = tostring(DEFAULT_HEIGHT),
-            Callback = function(text)
-                local num = tonumber(text)
-                if num then
-                    DEFAULT_HEIGHT = num
-                    -- Re-adjust semua route
-                    for i, pack in ipairs(routes) do
-                        local name = pack[1]
-                        local url = "https://raw.githubusercontent.com/yrejinhoo/Replays/refs/heads/main/PARGOY/V2/PARGOY.lua"
-                        routes[i] = {name, loadRoute(url)}
-                    end
-                    notify("Default Height","Diatur ke "..tostring(num).." (route disesuaikan ulang)",2)
-                else
-                    notify("Default Height","Input tidak valid!",2)
-                end
-            end
-        })
-
-        ToolsTab:Button({
-            Title = "📏 Cek Tinggi Avatar",
-            Icon = "lucide:ruler",
-            Desc = "Tampilkan tinggi avatar",
-            Callback = function()
-                local ok, err = pcall(function() loadstring(game:HttpGet("https://pastebin.com/raw/fD6Hg0Eq"))() end)
-                if ok then notify("Avatar Height","Script tinggi avatar berjalan!",3)
-                else notify("Avatar Height","Gagal: "..tostring(err),4) end
-            end
-        })
-
-        ToolsTab:Button({
-            Title = "⚙️ Auto Walk Khusus Yahayuk",
-            Icon = "lucide:cpu",
-            Desc = "Jalankan Auto Walk Yahayuk",
-            Callback = function()
-                local ok, err = pcall(function()
-                    loadstring(game:HttpGet("https://raw.githubusercontent.com/rebelscodeee-max/Loader-Auto-Walk/refs/heads/main/AR%20YH"))()
-                end)
-                if ok then notify("Auto Walk","Script Mount Yahayuk berhasil dijalankan!",3)
-                else notify("Auto Walk","Gagal memuat: "..tostring(err),4) end
-            end
-        })
-
-        --========================
-        -- TAB: Tampilan
-        --========================
-        local TampilanTab = Window:Tab({ Title = "Tampilan", Icon = "lucide:app-window" })
-        TampilanTab:Paragraph({ Title = "Tema & Jam" })
-
-        local themes = {}
-        for t,_ in pairs(WindUI:GetThemes()) do table.insert(themes, t) end
-        table.sort(themes)
-
-        local canchangetheme = true
-        local canchangedropdown = true
-
-        local themeDropdown = TampilanTab:Dropdown({
-            Title = "Pilih tema",
-            Values = themes,
-            SearchBarEnabled = true,
-            Value = "Midnight",
-            Callback = function(theme)
-                canchangedropdown = false
-                WindUI:SetTheme(theme)
-                notify("Tema disesuaikan", theme, 2)
-                canchangedropdown = true
-            end
-        })
-
-        local transparencySlider = TampilanTab:Slider({
-            Title = "Transparasi",
-            Value = { Min = 0, Max = 1, Default = 0.2 },
-            Step = 0.1,
-            Callback = function(value)
-                WindUI.TransparencyValue = tonumber(value)
-                Window:ToggleTransparency(tonumber(value) > 0)
-            end
-        })
-
-        local ThemeToggle = TampilanTab:Toggle({
-            Title = "Enable Dark Mode",
-            Desc = "Use dark color scheme",
-            Value = true,
-            Callback = function(state)
-                if canchangetheme then
-                    WindUI:SetTheme(state and "Dark" or "Light")
-                end
-                if canchangedropdown then
-                    themeDropdown:Select(state and "Dark" or "Light")
-                end
-            end
-        })
-
-        WindUI:OnThemeChange(function(theme)
-            canchangetheme = false
-            ThemeToggle:Set(theme == "Dark")
-            canchangetheme = true
-        end)
-
-        TampilanTab:Button({
-            Title = "Create New Theme",
-            Icon = "plus",
-            Callback = function()
-                Window:Dialog({
-                    Title = "Create Theme",
-                    Content = "This feature is coming soon!",
-                    Buttons = { { Title = "OK", Variant = "Primary" } }
-                })
-            end
-        })
-
-        -- Tag Jam Real-time
-        local TimeTag = Window:Tag({ Title = "--:--:--", Icon = "lucide:timer" })
-        task.spawn(function()
-            while true do
-                local now = os.date("*t")
-                TimeTag:SetTitle(string.format("%02d:%02d:%02d", now.hour, now.min, now.sec))
-                task.wait(0.25)
-            end
-        end)
-
-        notify("AutoWalk Mount", "GUI lengkap dimuat! 🎉", 3)
-        MainTab:Show()
+    end
+})
+MainTab:Toggle({
+    Title = "Interval Flip",
+    Icon = "lucide:refresh-ccw",
+    Desc = "ON → Hadap belakang tiap frame",
+    Value = false,
+    Callback = function(state)
+        intervalFlip = state
+        notify("Interval Flip", state and "✅ Aktif" or "❌ Nonaktif", 2)
     end
 })
 
---========================================================
--- Finalize Window
---========================================================
+MainTab:Toggle({
+    Title = "Anti Beton Ultra-Smooth",
+    Icon = "lucide:shield",
+    Desc = "Mencegah jatuh secara kaku saat melayang",
+    Value = false,
+    Callback = function(state)
+        antiBetonActive = state
+        if state then
+            enableAntiBeton()
+            WindUI:Notify({
+                Title = "Anti Beton",
+                Content = "✅ Aktif (Ultra-Smooth)",
+                Duration = 2
+            })
+        else
+            disableAntiBeton()
+            WindUI:Notify({
+                Title = "Anti Beton",
+                Content = "❌ Nonaktif",
+                Duration = 2
+            })
+        end
+    end
+})
+
+MainTab:Button({
+    Title = "START",
+    Icon = "craft:back-to-start-stroke",
+    Desc = "Mulai dari checkpoint terdekat",
+    Callback = function() pcall(runRouteOnce) end
+})
+MainTab:Button({
+    Title = "AWAL KE AKHIR",
+    Desc = "Jalankan semua checkpoint",
+    Icon = "craft:back-to-start-stroke",
+    Callback = function() pcall(runAllRoutes) end
+})
+MainTab:Button({
+    Title = "Stop track",
+    Icon = "geist:stop-circle",
+    Desc = "Hentikan route",
+    Callback = function() pcall(stopRoute) end
+})
+for idx, data in ipairs(routes) do
+    MainTab:Button({
+        Title = "TRACK "..data[1],
+        Icon = "lucide:train-track",
+        Desc = "Jalankan dari "..data[1],
+        Callback = function()
+            pcall(function() runSpecificRoute(idx) end)
+        end
+    })
+end
+
+-- Settings
+SettingsTab:Button({
+    Title = "TIMER GUI",
+    Icon = "lucide:layers-2",
+    Desc = "Timer untuk hitung BT",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Bardenss/YAHAYUK/refs/heads/main/TIMER"))()
+    end
+})
+SettingsTab:Button({
+    Title = "PRIVATE SERVER",
+    Icon = "lucide:layers-2",
+    Desc = "Klik untuk pindah ke private server",
+    Callback = function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Bardenss/PS/refs/heads/main/ps"))()
+    end
+})
+
+local delayValues = {}
+for i = 1, 10 do table.insert(delayValues, tostring(i).."s") end
+local teleportDelay = 3
+
+SettingsTab:Dropdown({
+    Title = "Delay Teleport",
+    Icon = "lucide:timer",
+    Values = delayValues,
+    Value = "3s",
+    Callback = function(val)
+        local n = tonumber(val:match("(%d+)"))
+        if n then teleportDelay = n end
+    end
+})
+
+SettingsTab:Slider({
+    Title = "WalkSpeed",
+    Icon = "lucide:zap",
+    Desc = "Atur kecepatan berjalan karakter",
+    Value = { 
+        Min = 10,
+        Max = 500,
+        Default = 16
+    },
+    Step = 1,
+    Suffix = "Speed",
+    Callback = function(val)
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.WalkSpeed = val
+        end
+    end
+})
+
+SettingsTab:Slider({
+    Title = "Jump Height",
+    Icon = "lucide:zap",
+    Desc = "Atur kekuatan lompat karakter",
+    Value = { 
+        Min = 10,
+        Max = 500,
+        Default = 50
+    },
+    Step = 1,
+    Suffix = "Height",
+    Callback = function(val)
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid.JumpPower = val
+        end
+    end
+})
+
+SettingsTab:Button({
+    Title = "Respawn Player",
+    Icon = "lucide:user-minus",
+    Desc = "Respawn karakter saat ini",
+    Callback = function()
+        respawnPlayer()
+    end
+})
+
+SettingsTab:Button({
+    Title = "Speed Coil",
+    Icon = "lucide:zap",
+    Desc = "Tambah Speed Coil ke karakter",
+    Callback = function()
+        local Players = game:GetService("Players")
+        local player = Players.LocalPlayer
+        local speedValue = 23
+
+        local function giveCoil(char)
+            local backpack = player:WaitForChild("Backpack")
+            if backpack:FindFirstChild("Speed Coil") or char:FindFirstChild("Speed Coil") then return end
+
+            local tool = Instance.new("Tool")
+            tool.Name = "Speed Coil"
+            tool.RequiresHandle = false
+            tool.Parent = backpack
+
+            tool.Equipped:Connect(function()
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if humanoid then humanoid.WalkSpeed = speedValue end
+            end)
+
+            tool.Unequipped:Connect(function()
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if humanoid then humanoid.WalkSpeed = 16 end
+            end)
+        end
+
+        if player.Character then giveCoil(player.Character) end
+        player.CharacterAdded:Connect(function(char)
+            task.wait(1)
+            giveCoil(char)
+        end)
+    end
+})
+
+SettingsTab:Button({
+    Title = "TP Tool",
+    Icon = "lucide:chevrons-up-down",
+    Desc = "Teleport pakai tool",
+    Callback = function()
+        local Players = game:GetService("Players")
+        local player = Players.LocalPlayer
+        local mouse = player:GetMouse()
+
+        local tool = Instance.new("Tool")
+        tool.RequiresHandle = false
+        tool.Name = "Teleport"
+        tool.Parent = player.Backpack
+
+        tool.Activated:Connect(function()
+            if mouse.Hit then
+                local char = player.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    char.HumanoidRootPart.CFrame = CFrame.new(mouse.Hit.Position + Vector3.new(0,3,0))
+                end
+            end
+        end)
+    end
+})
+
+SettingsTab:Button({
+    Title = "Gling GUI",
+    Icon = "lucide:layers-2",
+    Desc = "Load Gling GUI",
+    Callback = function()
+        loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Fling-Gui-Op-47914"))()
+    end
+})
+
+InfoTab:Button({
+    Title = "Copy Discord",
+    Icon = "geist:logo-discord",
+    Desc = "Salin link Discord ke clipboard",
+    Callback = function()
+        if setclipboard then
+            setclipboard("https://discord.gg/cjZPqHRV")
+            logAndNotify("Discord", "Link berhasil disalin!")
+        else
+            notify("Clipboard Error", "setclipboard tidak tersedia!", 2)
+        end
+    end
+})
+
+InfoTab:Section({
+    Title = "INFO SC",
+    TextSize = 20,
+})
+InfoTab:Section({
+    Title = [[
+Replay/route system untuk checkpoint.
+
+- Start CP = mulai dari checkpoint terdekat
+- Start To End = jalankan semua checkpoint
+- Run CPx → CPy = jalur spesifik
+- Playback Speed = atur kecepatan replay (0.25x - 3.00x)
+
+✨ Fitur Baru: Walk to Start Position
+Karakter akan berjalan ke posisi awal replay, bukan teleport!
+
+Own bardenss
+    ]],
+    TextSize = 16,
+    TextTransparency = 0.25,
+})
+
+Window:DisableTopbarButtons({
+    "Close",
+})
+
 Window:EditOpenButton({
-    Title = "AutoWalk Mount",
+    Title = "BANTAI GUNUNG",
     Icon = "geist:logo-nuxt",
     CornerRadius = UDim.new(0,16),
     StrokeThickness = 2,
-    Enabled = true
+    Color = ColorSequence.new(
+        Color3.fromHex("FF0F7B"), 
+        Color3.fromHex("F89B29")
+    ),
+    OnlyMobile = false,
+    Enabled = true,
+    Draggable = true,
 })
-Window:Tag({ Title = "Dummysih", Color = Color3.fromHex("#30ff6a"), Radius = 10 })
-if _G.__AWM_FULL_LOADED then _G.__AWM_FULL_LOADED.Window = Window end
-notify("AutoWalk Mount", "Launcher siap. Buka tab Launcher → klik 'Run GUI'.", 5)
-pcall(function() Window:Show(); Launcher:Show() end)
+
+Window:Tag({
+    Title = "V1.1.0",
+    Color = Color3.fromHex("#30ff6a"),
+    Radius = 10,
+})
+
+local TimeTag = Window:Tag({
+    Title = "--:--:--",
+    Icon = "lucide:timer",
+    Radius = 10,
+    Color = WindUI:Gradient({
+        ["0"]   = { Color = Color3.fromHex("#FF0F7B"), Transparency = 0 },
+        ["100"] = { Color = Color3.fromHex("#F89B29"), Transparency = 0 },
+    }, {
+        Rotation = 45,
+    }),
+})
+
+local hue = 0
+
+task.spawn(function()
+	while true do
+		local now = os.date("*t")
+		local hours   = string.format("%02d", now.hour)
+		local minutes = string.format("%02d", now.min)
+		local seconds = string.format("%02d", now.sec)
+
+		hue = (hue + 0.01) % 1
+		local color = Color3.fromHSV(hue, 1, 1)
+
+		TimeTag:SetTitle(hours .. ":" .. minutes .. ":" .. seconds)
+		TimeTag:SetColor(color)
+
+		task.wait(0.06)
+	end
+end)
+
+Window:CreateTopbarButton("theme-switcher", "moon", function()
+    WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "Light" or "Dark")
+    WindUI:Notify({
+        Title = "Theme Changed",
+        Content = "Current theme: "..WindUI:GetCurrentTheme(),
+        Duration = 2
+    })
+end, 990)
+
+tampTab:Paragraph({
+    Title = "Customize Interface",
+    Desc = "Personalize your experience",
+    Image = "palette",
+    ImageSize = 20,
+    Color = "White"
+})
+
+local themes = {}
+for themeName, _ in pairs(WindUI:GetThemes()) do
+    table.insert(themes, themeName)
+end
+table.sort(themes)
+
+local canchangetheme = true
+local canchangedropdown = true
+
+local themeDropdown = tampTab:Dropdown({
+    Title = "Pilih tema",
+    Values = themes,
+    SearchBarEnabled = true,
+    MenuWidth = 280,
+    Value = "Dark",
+    Callback = function(theme)
+        canchangedropdown = false
+        WindUI:SetTheme(theme)
+        WindUI:Notify({
+            Title = "Tema disesuaikan",
+            Content = theme,
+            Icon = "palette",
+            Duration = 2
+        })
+        canchangedropdown = true
+    end
+})
+
+local transparencySlider = tampTab:Slider({
+    Title = "Transparasi",
+    Value = { 
+        Min = 0,
+        Max = 1,
+        Default = 0.2,
+    },
+    Step = 0.1,
+    Callback = function(value)
+        WindUI.TransparencyValue = tonumber(value)
+        Window:ToggleTransparency(tonumber(value) > 0)
+    end
+})
+
+local ThemeToggle = tampTab:Toggle({
+    Title = "Enable Dark Mode",
+    Desc = "Use dark color scheme",
+    Value = true,
+    Callback = function(state)
+        if canchangetheme then
+            WindUI:SetTheme(state and "Dark" or "Light")
+        end
+        if canchangedropdown then
+            themeDropdown:Select(state and "Dark" or "Light")
+        end
+    end
+})
+
+WindUI:OnThemeChange(function(theme)
+    canchangetheme = false
+    ThemeToggle:Set(theme == "Dark")
+    canchangetheme = true
+end)
+
+tampTab:Button({
+    Title = "Create New Theme",
+    Icon = "plus",
+    Callback = function()
+        Window:Dialog({
+            Title = "Create Theme",
+            Content = "This feature is coming soon!",
+            Buttons = {
+                {
+                    Title = "OK",
+                    Variant = "Primary"
+                }
+            }
+        })
+    end
+})
+
+notify("BANTAI GUNUNG", "Script sudah di load dengan fitur Walk to Start Position! 🚶", 4)
+
+pcall(function()
+    Window:Show()
+    MainTab:Show()
+end)
