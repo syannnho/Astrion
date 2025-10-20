@@ -1,5 +1,4 @@
-
--- VIP Loader System - FULL CODE WITH 24H KEY EXPIRY + LOCAL STORAGE + COUNTDOWN + LIFETIME VIP + AUTO VIP UPGRADE
+-- VIP Loader System - FIXED VERSION
 -- Connected to: https://astrion-keycrate.vercel.app/api/validate
 
 local Players = game:GetService("Players")
@@ -50,7 +49,6 @@ local function saveVIPData(key)
         activatedAt = os.time()
     }
     writefile(VIP_STORAGE_FILE, HttpService:JSONEncode(data))
-    -- Delete regular key file if exists
     if isfile(STORAGE_FILE) then
         delfile(STORAGE_FILE)
     end
@@ -175,7 +173,6 @@ local function validateKey(key)
 
     local decoded = HttpService:JSONDecode(response)
     if decoded and decoded.success then
-        -- Check if this is a VIP key (lifetime)
         local isVIPKey = decoded.vip == true or decoded.lifetime == true or decoded.type == "vip"
         return true, "", isVIPKey
     else
@@ -267,7 +264,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     Avatar.Parent = AvatarFrame
     Instance.new("UICorner", Avatar).CornerRadius = UDim.new(0.25, 0)
 
-    -- VIP Badge Icon (top left of avatar)
+    -- VIP Badge Icon
     local VIPBadge = Instance.new("Frame")
     VIPBadge.Size = UDim2.new(0, isMobile() and 28 or 40, 0, isMobile() and 28 or 40)
     VIPBadge.Position = UDim2.new(0, isMobile() and -10 or -15, 0, isMobile() and -10 or -15)
@@ -312,7 +309,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     DisplayName.Font = Enum.Font.Gotham
     DisplayName.Parent = LeftPanel
 
-    -- Status Badge (VIP or Time-based)
+    -- Status Badge
     local StatusBadge = Instance.new("Frame")
     StatusBadge.Size = UDim2.new(0.85, 0, 0, isMobile() and 55 or 65)
     StatusBadge.Position = UDim2.new(0.5, 0, 0, isMobile() and 168 or 238)
@@ -484,7 +481,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     PargoyButton.BackgroundTransparency = 0.8
     PargoyButton.Text = ""
     PargoyButton.Parent = MapsFrame
-    PargoyButton.LayoutOrder = 3
+    PargoyButton.LayoutOrder = 1
     Instance.new("UICorner", PargoyButton).CornerRadius = UDim.new(0, 12)
     Instance.new("UIStroke", PargoyButton).Color = Color3.fromRGB(93, 173, 226)
 
@@ -507,7 +504,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     PargoyText.Font = Enum.Font.GothamBold
     PargoyText.Parent = PargoyButton
 
-    return ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, ArunikaButton, YahayukButton, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge, avatarStroke, VIPBadge, badgeStroke
+    return ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge, avatarStroke, VIPBadge, badgeStroke
 end
 
 -- Show status helper
@@ -519,7 +516,6 @@ end
 
 -- Upgrade to VIP visuals
 local function upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
-    -- Update text labels
     WelcomeText.Text = "WELCOME VIP"
     Subtitle.Text = "Lifetime Premium Access"
     CountdownIcon.Text = "👑 VIP Status"
@@ -527,7 +523,6 @@ local function upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel
     CountdownLabel.Text = "LIFETIME"
     CountdownLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
     
-    -- Animate status badge to gold
     TweenService:Create(StatusBadge, TweenInfo.new(0.5), {
         BackgroundColor3 = Color3.fromRGB(255, 215, 0),
         BackgroundTransparency = 0.85
@@ -537,13 +532,11 @@ local function upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel
         Color = Color3.fromRGB(255, 215, 0)
     }):Play()
     
-    -- Animate avatar border to gold
     TweenService:Create(avatarStroke, TweenInfo.new(0.5), {
         Color = Color3.fromRGB(255, 215, 0),
         Thickness = 3
     }):Play()
     
-    -- Show VIP badge with animation
     VIPBadge.Visible = true
     VIPBadge.Size = UDim2.new(0, 0, 0, 0)
     TweenService:Create(VIPBadge, TweenInfo.new(0.4, Enum.EasingStyle.Back), {
@@ -553,14 +546,13 @@ local function upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel
     print("🎉 Upgraded to VIP - UI updated!")
 end
 
--- Check if user became VIP (auto upgrade check)
+-- Check if user became VIP
 local function checkVIPUpgrade()
     local vipIds = fetchVIPIds()
     local isVIP = isUserVIP(userId, vipIds)
     local hasVIPKey, vipKey = loadVIPData()
     
     if isVIP and not hasVIPKey then
-        -- User is now in VIP list but doesn't have VIP file yet
         saveVIPData("VIP_ID_" .. userId)
         return true
     end
@@ -571,7 +563,10 @@ end
 -- Load map
 local function loadMap(mapName, gui, blur)
     local url = MAP_SCRIPTS[mapName]
-    if not url then return end
+    if not url then 
+        warn("❌ Map script not found for:", mapName)
+        return 
+    end
 
     local main = gui:FindFirstChild("MainFrame")
     if main then
@@ -582,9 +577,16 @@ local function loadMap(mapName, gui, blur)
     end
 
     task.wait(0.5)
-    pcall(function()
+    
+    local success, err = pcall(function()
         loadstring(game:HttpGet(url))()
     end)
+    
+    if not success then
+        warn("❌ Failed to load map:", mapName, "Error:", err)
+    else
+        print("✅ Map loaded successfully:", mapName)
+    end
 
     if blur then blur:Destroy() end
     gui:Destroy()
@@ -597,7 +599,6 @@ local function main()
     local hasVIPKey, vipKey = loadVIPData()
     local keyValid, expireTime = isKeyValid()
 
-    -- Priority: VIP ID > VIP Key > Regular Key
     local hasAccess = isVIP or hasVIPKey or keyValid
     local isLifetimeAccess = isVIP or hasVIPKey
 
@@ -609,14 +610,14 @@ local function main()
         print("✅ Key valid until: " .. getExpiryTimeString(expireTime))
     end
 
-    local ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, ArunikaButton, YahayukButton, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge, avatarStroke, VIPBadge, badgeStroke = createLoader(isVIP, hasVIPKey, LocalPlayer.Name, expireTime)
+    local ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge, avatarStroke, VIPBadge, badgeStroke = createLoader(isVIP, hasVIPKey, LocalPlayer.Name, expireTime)
 
-    -- Auto VIP upgrade checker (runs every 30 seconds)
+    -- Auto VIP upgrade checker
     local vipCheckConnection
     if not isLifetimeAccess and keyValid then
         vipCheckConnection = task.spawn(function()
             while true do
-                task.wait(30) -- Check every 30 seconds
+                task.wait(30)
                 if checkVIPUpgrade() then
                     upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
                     if countdownConnection then
@@ -628,7 +629,7 @@ local function main()
         end)
     end
 
-    -- Countdown update loop (only for non-VIP users with time-based keys)
+    -- Countdown update loop
     local countdownConnection
     if keyValid and not isLifetimeAccess and expireTime then
         countdownConnection = game:GetService("RunService").Heartbeat:Connect(function()
@@ -636,19 +637,18 @@ local function main()
             if timeRemaining > 0 then
                 CountdownLabel.Text = formatTimeRemaining(timeRemaining)
                 
-                -- Color changes based on time
-                if timeRemaining <= 3600 then -- Less than 1 hour
-                    CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60) -- Red
+                if timeRemaining <= 3600 then
+                    CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
                     StatusBadge.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
                     StatusBadge.BackgroundTransparency = 0.85
                     badgeStroke.Color = Color3.fromRGB(231, 76, 60)
-                elseif timeRemaining <= 10800 then -- Less than 3 hours
-                    CountdownLabel.TextColor3 = Color3.fromRGB(230, 126, 34) -- Orange
+                elseif timeRemaining <= 10800 then
+                    CountdownLabel.TextColor3 = Color3.fromRGB(230, 126, 34)
                     StatusBadge.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
                     StatusBadge.BackgroundTransparency = 0.85
                     badgeStroke.Color = Color3.fromRGB(230, 126, 34)
                 else
-                    CountdownLabel.TextColor3 = Color3.fromRGB(46, 204, 113) -- Green
+                    CountdownLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
                     StatusBadge.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
                     StatusBadge.BackgroundTransparency = 0.85
                     badgeStroke.Color = Color3.fromRGB(93, 173, 226)
@@ -662,12 +662,11 @@ local function main()
                 if vipCheckConnection then
                     task.cancel(vipCheckConnection)
                 end
-                -- Force user to re-authenticate
                 deleteKeyData()
                 task.wait(2)
                 if ScreenGui then ScreenGui:Destroy() end
                 if BlurEffect then BlurEffect:Destroy() end
-                main() -- Restart
+                main()
             end
         end)
     end
@@ -680,7 +679,7 @@ local function main()
         BackgroundTransparency = 0
     }):Play()
 
-    -- If has access (VIP or valid key), show maps immediately
+    -- If has access, show maps immediately
     if hasAccess then
         task.wait(0.6)
         WelcomeText.Visible = false
@@ -704,15 +703,12 @@ local function main()
             local ok, err, isVIPKey = validateKey(key)
             if ok then
                 if isVIPKey then
-                    -- VIP Key - Lifetime Access
                     saveVIPData(key)
                     showStatus(StatusText, "✓ VIP Access Granted!\nLifetime Access", true)
                     task.wait(1.5)
                     
-                    -- Upgrade UI to VIP
                     upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
                     
-                    -- Stop countdown if running
                     if countdownConnection then
                         countdownConnection:Disconnect()
                     end
@@ -720,7 +716,6 @@ local function main()
                         task.cancel(vipCheckConnection)
                     end
                 else
-                    -- Regular Key - 24 Hour Access
                     local newExpireTime = os.time() + KEY_DURATION
                     saveKeyData(key, newExpireTime)
                     
@@ -728,12 +723,10 @@ local function main()
                     showStatus(StatusText, "✓ Access granted!\nExpires: " .. expiryTimeStr, true)
                     task.wait(1.5)
 
-                    -- Start countdown after successful verification
                     if countdownConnection then
                         countdownConnection:Disconnect()
                     end
                     
-                    -- Start VIP check loop
                     if vipCheckConnection then
                         task.cancel(vipCheckConnection)
                     end
@@ -755,7 +748,6 @@ local function main()
                         if timeRemaining > 0 then
                             CountdownLabel.Text = formatTimeRemaining(timeRemaining)
                             
-                            -- Color changes based on time
                             if timeRemaining <= 3600 then
                                 CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
                                 StatusBadge.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
@@ -800,27 +792,7 @@ local function main()
         end)
     end)
 
-    -- Map buttons
-    ArunikaButton.MouseButton1Click:Connect(function() 
-        if countdownConnection then
-            countdownConnection:Disconnect()
-        end
-        if vipCheckConnection then
-            task.cancel(vipCheckConnection)
-        end
-        loadMap("Arunika", ScreenGui, BlurEffect) 
-    end)
-    
-    YahayukButton.MouseButton1Click:Connect(function() 
-        if countdownConnection then
-            countdownConnection:Disconnect()
-        end
-        if vipCheckConnection then
-            task.cancel(vipCheckConnection)
-        end
-        loadMap("Yahayuk", ScreenGui, BlurEffect) 
-    end)
-    
+    -- Map button (FIXED - only Pargoy exists)
     PargoyButton.MouseButton1Click:Connect(function() 
         if countdownConnection then
             countdownConnection:Disconnect()
@@ -846,8 +818,6 @@ local function main()
         end)
     end
     hover(VerifyButton)
-    hover(ArunikaButton)
-    hover(YahayukButton)
     hover(PargoyButton)
 
     -- Input focus
@@ -873,7 +843,7 @@ end
 
 -- Run
 main()
-print("✅ VIP Loader v10.0 - Auto VIP Upgrade System | Device:", isMobile() and "Mobile" or "Desktop")
+print("✅ VIP Loader v10.1 - FIXED | Device:", isMobile() and "Mobile" or "Desktop")
 print("📁 Storage location: " .. STORAGE_FOLDER)
 print("👑 VIP keys grant lifetime access - Regular keys last 24 hours")
 print("🔄 Auto VIP upgrade check every 30 seconds")
