@@ -747,7 +747,97 @@ for idx, data in ipairs(routes) do
     })
 end
 
--- Settings
+-- ============================================================
+-- AUTOMATION TAB - CP DETECTOR (FIXED)
+-- ============================================================
+local AutomationSection = AutomationTab:Section({ Title = "CP Detector Settings", Icon = "lucide:radar" })
+
+AutomationTab:Toggle({
+    Title = "🔎 Auto Detect CP During Route",
+    Icon = "lucide:map-pin",
+    Value = false,
+    Desc = "Pause replay saat mendeteksi BasePart sesuai keyword",
+    Callback = function(state)
+        autoCPEnabled = state
+        notify("CP Detector", state and "✅ Aktif" or "❌ Nonaktif", 2)
+    end
+})
+
+AutomationTab:Toggle({
+    Title = "🔦 CP Beam Visual",
+    Icon = "lucide:lightbulb",
+    Value = cpBeamEnabled,
+    Desc = "Tampilkan garis arah ke CP terdekat",
+    Callback = function(state)
+        cpBeamEnabled = state
+        notify("CP Beam", state and "✅ Aktif" or "❌ Nonaktif", 2)
+        if not state and cpHighlight then
+            cpHighlight:Destroy()
+            cpHighlight = nil
+        end
+    end
+})
+
+AutomationTab:Slider({
+    Title = "⏲️ Delay setelah CP (detik)",
+    Icon = "lucide:clock",
+    Value = { Min = 1, Max = 60, Default = cpDelayAfterDetect },
+    Step = 1,
+    Suffix = "s",
+    Callback = function(val)
+        cpDelayAfterDetect = tonumber(val) or cpDelayAfterDetect
+        notify("CP Detector", "Delay: " .. tostring(cpDelayAfterDetect) .. " dtk", 2)
+    end
+})
+
+AutomationTab:Slider({
+    Title = "📏 Jarak Deteksi CP (studs)",
+    Icon = "lucide:ruler",
+    Value = { Min = 5, Max = 100, Default = cpDetectRadius },
+    Step = 1,
+    Suffix = "studs",
+    Callback = function(val)
+        cpDetectRadius = tonumber(val) or cpDetectRadius
+        notify("CP Detector", "Radius: " .. tostring(cpDetectRadius) .. " studs", 2)
+    end
+})
+
+AutomationTab:Input({
+    Title = "🧩 Keyword BasePart CP",
+    Icon = "lucide:text-cursor",
+    Placeholder = "mis. cp / 14 / pad",
+    Default = cpKeyword,
+    Callback = function(text)
+        if text and text ~= "" then
+            cpKeyword = text
+            lastUsedKeyword = nil
+            notify("CP Detector", "Keyword diubah ke: " .. text, 2)
+        else
+            notify("CP Detector", "Keyword kosong, tetap: " .. cpKeyword, 2)
+        end
+    end
+})
+
+local AutomationInfoSection = AutomationTab:Section({ Title = "CP Detector Info", Icon = "lucide:info" })
+
+AutomationTab:Paragraph({
+    Title = "Cara Kerja CP Detector",
+    Desc = [[
+• Auto Detect CP = Deteksi checkpoint otomatis saat replay
+• CP Beam = Garis visual ke checkpoint terdekat
+• Delay = Waktu tunggu setelah sentuh checkpoint
+• Jarak Deteksi = Radius mencari checkpoint (studs)
+• Keyword = Nama BasePart checkpoint (huruf kecil)
+
+Contoh keyword: "cp", "checkpoint", "pad", "14"
+Script akan mencari part dengan nama yang cocok.
+    ]],
+    TextSize = 14,
+})
+
+-- ============================================================
+-- SETTINGS TAB
+-- ============================================================
 SettingsTab:Button({
     Title = "TIMER GUI",
     Icon = "lucide:layers-2",
@@ -898,6 +988,9 @@ SettingsTab:Button({
     end
 })
 
+-- ============================================================
+-- INFO TAB
+-- ============================================================
 InfoTab:Button({
     Title = "Copy Discord",
     Icon = "geist:logo-discord",
@@ -925,8 +1018,19 @@ Replay/route system untuk checkpoint.
 - Run CPx → CPy = jalur spesifik
 - Playback Speed = atur kecepatan replay (0.25x - 3.00x)
 
-✨ Fitur Baru: Walk to Start Position
-Karakter akan berjalan ke posisi awal replay, bukan teleport!
+✨ Fitur Baru V1.2.0:
+• Walk to Start Position - Jalan ke posisi awal, bukan teleport
+• Auto CP Detector - Deteksi checkpoint otomatis saat replay
+• CP Beam Visual - Garis arah ke checkpoint terdekat
+• Smart Distance Check - Skip walking jika jarak < 5 studs
+• Timeout Protection - Max 30 detik untuk reach position
+
+Tab Automation:
+• Auto Detect CP - Toggle deteksi checkpoint
+• CP Beam Visual - Toggle garis visual
+• Delay setelah CP - Atur waktu tunggu (1-60 detik)
+• Jarak Deteksi - Atur radius deteksi (5-100 studs)
+• Keyword CP - Nama BasePart checkpoint
 
 Own bardenss
     ]],
@@ -934,70 +1038,9 @@ Own bardenss
     TextTransparency = 0.25,
 })
 
-Window:DisableTopbarButtons({
-    "Close",
-})
-
-Window:EditOpenButton({
-    Title = "BANTAI GUNUNG",
-    Icon = "geist:logo-nuxt",
-    CornerRadius = UDim.new(0,16),
-    StrokeThickness = 2,
-    Color = ColorSequence.new(
-        Color3.fromHex("FF0F7B"), 
-        Color3.fromHex("F89B29")
-    ),
-    OnlyMobile = false,
-    Enabled = true,
-    Draggable = true,
-})
-
-Window:Tag({
-    Title = "V1.1.0",
-    Color = Color3.fromHex("#30ff6a"),
-    Radius = 10,
-})
-
-local TimeTag = Window:Tag({
-    Title = "--:--:--",
-    Icon = "lucide:timer",
-    Radius = 10,
-    Color = WindUI:Gradient({
-        ["0"]   = { Color = Color3.fromHex("#FF0F7B"), Transparency = 0 },
-        ["100"] = { Color = Color3.fromHex("#F89B29"), Transparency = 0 },
-    }, {
-        Rotation = 45,
-    }),
-})
-
-local hue = 0
-
-task.spawn(function()
-	while true do
-		local now = os.date("*t")
-		local hours   = string.format("%02d", now.hour)
-		local minutes = string.format("%02d", now.min)
-		local seconds = string.format("%02d", now.sec)
-
-		hue = (hue + 0.01) % 1
-		local color = Color3.fromHSV(hue, 1, 1)
-
-		TimeTag:SetTitle(hours .. ":" .. minutes .. ":" .. seconds)
-		TimeTag:SetColor(color)
-
-		task.wait(0.06)
-	end
-end)
-
-Window:CreateTopbarButton("theme-switcher", "moon", function()
-    WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "Light" or "Dark")
-    WindUI:Notify({
-        Title = "Theme Changed",
-        Content = "Current theme: "..WindUI:GetCurrentTheme(),
-        Duration = 2
-    })
-end, 990)
-
+-- ============================================================
+-- TAMPILAN TAB
+-- ============================================================
 tampTab:Paragraph({
     Title = "Customize Interface",
     Desc = "Personalize your experience",
@@ -1085,7 +1128,77 @@ tampTab:Button({
     end
 })
 
-notify("BANTAI GUNUNG", "Script sudah di load dengan fitur Walk to Start Position! 🚶", 4)
+-- ============================================================
+-- WINDOW CONFIGURATION
+-- ============================================================
+Window:DisableTopbarButtons({
+    "Close",
+})
+
+Window:EditOpenButton({
+    Title = "BANTAI GUNUNG",
+    Icon = "geist:logo-nuxt",
+    CornerRadius = UDim.new(0,16),
+    StrokeThickness = 2,
+    Color = ColorSequence.new(
+        Color3.fromHex("FF0F7B"), 
+        Color3.fromHex("F89B29")
+    ),
+    OnlyMobile = false,
+    Enabled = true,
+    Draggable = true,
+})
+
+Window:Tag({
+    Title = "V1.2.0",
+    Color = Color3.fromHex("#30ff6a"),
+    Radius = 10,
+})
+
+local TimeTag = Window:Tag({
+    Title = "--:--:--",
+    Icon = "lucide:timer",
+    Radius = 10,
+    Color = WindUI:Gradient({
+        ["0"]   = { Color = Color3.fromHex("#FF0F7B"), Transparency = 0 },
+        ["100"] = { Color = Color3.fromHex("#F89B29"), Transparency = 0 },
+    }, {
+        Rotation = 45,
+    }),
+})
+
+local hue = 0
+
+task.spawn(function()
+	while true do
+		local now = os.date("*t")
+		local hours   = string.format("%02d", now.hour)
+		local minutes = string.format("%02d", now.min)
+		local seconds = string.format("%02d", now.sec)
+
+		hue = (hue + 0.01) % 1
+		local color = Color3.fromHSV(hue, 1, 1)
+
+		TimeTag:SetTitle(hours .. ":" .. minutes .. ":" .. seconds)
+		TimeTag:SetColor(color)
+
+		task.wait(0.06)
+	end
+end)
+
+Window:CreateTopbarButton("theme-switcher", "moon", function()
+    WindUI:SetTheme(WindUI:GetCurrentTheme() == "Dark" and "Light" or "Dark")
+    WindUI:Notify({
+        Title = "Theme Changed",
+        Content = "Current theme: "..WindUI:GetCurrentTheme(),
+        Duration = 2
+    })
+end, 990)
+
+-- ============================================================
+-- FINAL NOTIFICATION & WINDOW SHOW
+-- ============================================================
+notify("BANTAI GUNUNG", "Script V1.2.0 sudah di load dengan CP Detector! 🎯", 4)
 
 pcall(function()
     Window:Show()
