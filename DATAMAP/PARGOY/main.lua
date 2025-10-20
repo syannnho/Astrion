@@ -111,7 +111,7 @@ end
 
 -- daftar link raw route (ubah ke link punyamu)
 routes = {
-    {"BASE → FINISH", loadRoute("LINK GH")},
+    {"BASE → FINISH", loadRoute("https://raw.githubusercontent.com/yrejinhoo/Replays/refs/heads/main/PARGOY/V2/PARGOY.lua")},
 }
 
 -- ============================================================
