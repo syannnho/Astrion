@@ -220,14 +220,18 @@ local function setupBypass(char)
             end
 
             if dist > 0.005 then
-                -- Gunakan velocity smooth untuk movement
-                local moveStrength = math.clamp(smoothVelocity.Magnitude * 0.15, 0, 1)
+                -- Gunakan velocity smooth untuk movement yang lebih natural
+                local moveStrength = math.clamp(smoothVelocity.Magnitude * 0.1, 0, 0.8)
                 humanoid:Move(smoothVelocity.Unit * moveStrength, false)
             else
+                -- Jangan paksa idle, biarkan animasi natural jalan
                 humanoid:Move(Vector3.zero, false)
             end
 
             lastVelocity = smoothVelocity
+        else
+            -- Saat bypass OFF, biarkan humanoid bergerak normal
+            humanoid:Move(Vector3.zero, false)
         end
         lastPos = hrp.Position
     end)
@@ -239,7 +243,71 @@ if player.Character then setupBypass(player.Character) end
 -- helper otomatis bypass
 local function setBypass(state)
     bypassActive = state
-    notify("Bypass Animasi", state and "✅ Aktif" or "❌ Nonaktif", 2)
+    if state then
+        notify("Bypass Animasi", "✅ Aktif", 2)
+    else
+        notify("Bypass Animasi", "❌ Nonaktif", 2)
+        -- Reset movement saat OFF
+        local char = player.Character
+        if char then
+            local humanoid = char:FindFirstChild("Humanoid")
+            if humanoid then
+                humanoid:Move(Vector3.zero, false)
+            end
+        end
+    end
+end
+
+-- Fungsi jalan ke posisi target (walkToStart)
+local function walkToStart(targetCF)
+    if not hrp then refreshHRP() end
+    local char = player.Character
+    if not char then return end
+    local humanoid = char:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    
+    local startPos = hrp.Position
+    local targetPos = targetCF.Position
+    local distance = (targetPos - startPos).Magnitude
+    
+    -- Jika jaraknya dekat (< 50 studs), langsung mulai
+    if distance < 50 then
+        return true
+    end
+    
+    -- Jika jauh, jalan ke sana
+    notify("Auto Walk", "Berjalan ke start point...", 2)
+    humanoid:MoveTo(targetPos)
+    
+    -- Tunggu sampai sampai atau timeout (30 detik)
+    local timeout = 30
+    local elapsed = 0
+    while elapsed < timeout do
+        if not hrp or not hrp.Parent then return false end
+        local currentDist = (hrp.Position - targetPos).Magnitude
+        
+        -- Kalau sudah dekat (< 10 studs), selesai
+        if currentDist < 10 then
+            humanoid:MoveTo(hrp.Position) -- stop movement
+            return true
+        end
+        
+        -- Cek jika застрял/stuck (tidak bergerak)
+        local movedDist = (hrp.Position - startPos).Magnitude
+        if elapsed > 5 and movedDist < 5 then
+            notify("Auto Walk", "⚠️ Stuck! Teleporting...", 2)
+            hrp.CFrame = targetCF
+            return true
+        end
+        
+        task.wait(0.5)
+        elapsed += 0.5
+    end
+    
+    -- Timeout, teleport paksa
+    notify("Auto Walk", "⚠️ Timeout! Teleporting...", 2)
+    hrp.CFrame = targetCF
+    return true
 end
 
 
@@ -248,26 +316,33 @@ local function runRouteOnce()
     if #routes == 0 then return end
     if not hrp then refreshHRP() end
 
-    setBypass(true) -- otomatis ON
-    isRunning = true
-
     local idx = getNearestRoute()
-    logAndNotify("Mulai dari cp : ", routes[idx][1])
     local frames = routes[idx][2]
     if #frames < 2 then 
-        isRunning = false
-        setBypass(false)
         return 
     end
-
+    
     local startIdx = getNearestFrameIndex(frames)
+    local startFrame = frames[startIdx]
+    
+    -- Jalan ke start point dulu
+    logAndNotify("Mulai dari cp : ", routes[idx][1])
+    if not walkToStart(startFrame) then
+        notify("Error", "Gagal mencapai start point!", 3)
+        return
+    end
+    
+    -- Baru aktifkan bypass dan mulai route
+    setBypass(true)
+    isRunning = true
+
     for i = startIdx, #frames - 1 do
         if not isRunning then break end
         lerpCF(frames[i], frames[i+1])
     end
 
     isRunning = false
-    setBypass(false) -- otomatis OFF
+    setBypass(false)
 end
 
 local function runAllRoutes()
@@ -276,7 +351,6 @@ local function runAllRoutes()
 
     while isRunning do
         if not hrp then refreshHRP() end
-        setBypass(true)
 
         local idx = getNearestRoute()
         logAndNotify("Sesuaikan dari cp : ", routes[idx][1])
@@ -285,20 +359,34 @@ local function runAllRoutes()
             if not isRunning then break end
             local frames = routes[r][2]
             if #frames < 2 then continue end
+            
             local startIdx = getNearestFrameIndex(frames)
+            local startFrame = frames[startIdx]
+            
+            -- Jalan ke start dulu (tanpa bypass)
+            if not walkToStart(startFrame) then
+                notify("Error", "Gagal mencapai CP "..r, 3)
+                break
+            end
+            
+            -- Aktifkan bypass untuk route
+            setBypass(true)
+            
             for i = startIdx, #frames - 1 do
                 if not isRunning then break end
                 lerpCF(frames[i], frames[i+1])
             end
+            
+            setBypass(false)
         end
-
-        setBypass(false)
 
         -- Respawn + delay 5 detik HANYA jika masih running
         if not isRunning then break end
         respawnPlayer()
         task.wait(5)
     end
+    
+    setBypass(false)
 end
 
 local function stopRoute()
@@ -319,19 +407,33 @@ end
 local function runSpecificRoute(routeIdx)
     if not routes[routeIdx] then return end
     if not hrp then refreshHRP() end
-    isRunning = true
+    
     local frames = routes[routeIdx][2]
     if #frames < 2 then 
-        isRunning = false 
         return 
     end
+    
     logAndNotify("Memulai track : ", routes[routeIdx][1])
     local startIdx = getNearestFrameIndex(frames)
+    local startFrame = frames[startIdx]
+    
+    -- Jalan ke start dulu
+    if not walkToStart(startFrame) then
+        notify("Error", "Gagal mencapai start point!", 3)
+        return
+    end
+    
+    -- Aktifkan bypass dan mulai route
+    setBypass(true)
+    isRunning = true
+    
     for i = startIdx, #frames - 1 do
         if not isRunning then break end
         lerpCF(frames[i], frames[i+1])
     end
+    
     isRunning = false
+    setBypass(false)
 end
 
 -- ===============================
