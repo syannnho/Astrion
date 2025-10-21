@@ -1353,7 +1353,7 @@ local DiscordTab = DiscordSection:Tab({
     Icon = "message-circle"
 })
 
-local InviteCode = "KEajwZQaRd"
+local InviteCode = "yQpag5BmH"
 local DiscordAPI = "https://discord.com/api/v10/invites/" .. InviteCode .. "?with_counts=true&with_expiration=true"
 
 local function safeRequest(url)
