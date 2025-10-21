@@ -1,4 +1,4 @@
--- VIP Loader System - FIXED VERSION
+-- VIP Loader System v11.0 - UPDATED
 -- Connected to: https://astrion-keycrate.vercel.app/api/validate
 
 local Players = game:GetService("Players")
@@ -9,24 +9,38 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local userId = LocalPlayer.UserId
 
--- GitHub URL for VIP IDs only
+-- GitHub URLs
 local GITHUB_VIP_URL = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/vip.txt"
+local TRIAL_VIP_URL = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/Keys/Trialvip.txt"
 
--- Map Scripts
-local MAP_SCRIPTS = {
-    Pargoy = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/PARGOY/main.lua"
+-- Map Scripts - ALL MAPS
+local ALL_MAPS = {
+    {name = "ATIN", url = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/ATIN/main.lua", icon = "🏔️"},
+    {name = "ARUNIKA", url = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/ARUNIKA/main.lua", icon = "🌅"},
+    {name = "DAUN", url = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/DAUN/main.lua", icon = "🍃"},
+    {name = "MT AGE", url = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/MT%20AGE/main.lua", icon = "⛰️"},
+    {name = "PARGOY", url = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/PARGOY/main.lua", icon = "🗻"},
+    {name = "PEDAUNAN", url = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/PEDAUNAN/main.lua", icon = "🌿"},
+    {name = "SIBUATAN", url = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/SIBUATAN/main.lua", icon = "🏞️"}
+}
+
+-- Free user map (only ARUNIKA)
+local FREE_MAPS = {
+    {name = "ARUNIKA", url = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/ARUNIKA/main.lua", icon = "🌅"}
 }
 
 -- Key validation endpoint
 local KEY_VALIDATE_URL = "https://astrion-keycrate.vercel.app/api/validate"
 
--- Local storage path
+-- Local storage
 local STORAGE_FOLDER = "AstrionKeys"
 local STORAGE_FILE = STORAGE_FOLDER .. "/key_" .. userId .. ".json"
 local VIP_STORAGE_FILE = STORAGE_FOLDER .. "/vip_" .. userId .. ".json"
+local TRIAL_STORAGE_FILE = STORAGE_FOLDER .. "/trial_" .. userId .. ".json"
 
--- Key duration
-local KEY_DURATION = 86400 -- 24 hours in seconds
+-- Key durations
+local KEY_DURATION = 86400 -- 24 hours
+local TRIAL_DURATION = 3600 -- 1 hour
 
 -- Device detection
 local function isMobile()
@@ -49,10 +63,23 @@ local function saveVIPData(key)
         activatedAt = os.time()
     }
     writefile(VIP_STORAGE_FILE, HttpService:JSONEncode(data))
-    if isfile(STORAGE_FILE) then
-        delfile(STORAGE_FILE)
-    end
+    if isfile(STORAGE_FILE) then delfile(STORAGE_FILE) end
+    if isfile(TRIAL_STORAGE_FILE) then delfile(TRIAL_STORAGE_FILE) end
     print("✅ VIP Key saved - Lifetime Access")
+end
+
+local function saveTrialVIPData(key, expireTime)
+    ensureFolder()
+    local data = {
+        key = key,
+        userId = userId,
+        vipType = "trial",
+        expireTime = expireTime,
+        activatedAt = os.time()
+    }
+    writefile(TRIAL_STORAGE_FILE, HttpService:JSONEncode(data))
+    if isfile(STORAGE_FILE) then delfile(STORAGE_FILE) end
+    print("✅ Trial VIP Key saved - 1 Hour Access")
 end
 
 local function loadVIPData()
@@ -65,6 +92,24 @@ local function loadVIPData()
         end
     end
     return false, nil
+end
+
+local function loadTrialVIPData()
+    if isfile(TRIAL_STORAGE_FILE) then
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(readfile(TRIAL_STORAGE_FILE))
+        end)
+        if success and data and data.vipType == "trial" then
+            local currentTime = os.time()
+            if currentTime < data.expireTime then
+                return true, data.key, data.expireTime
+            else
+                delfile(TRIAL_STORAGE_FILE)
+                print("🗑️ Trial VIP expired and deleted")
+            end
+        end
+    end
+    return false, nil, nil
 end
 
 local function saveKeyData(key, expireTime)
@@ -93,34 +138,28 @@ end
 local function deleteKeyData()
     if isfile(STORAGE_FILE) then
         delfile(STORAGE_FILE)
-        print("🗑️ Expired key deleted from local storage")
+        print("🗑️ Expired key deleted")
     end
 end
 
 local function isKeyValid()
     local key, expireTime = loadKeyData()
     if key and expireTime then
-        local currentTime = os.time()
-        if currentTime < expireTime then
+        if os.time() < expireTime then
             return true, expireTime
         else
             deleteKeyData()
-            return false, nil
         end
     end
     return false, nil
 end
 
--- Format countdown time
+-- Format time
 local function formatTimeRemaining(seconds)
-    if seconds <= 0 then
-        return "EXPIRED"
-    end
-    
+    if seconds <= 0 then return "EXPIRED" end
     local hours = math.floor(seconds / 3600)
     local minutes = math.floor((seconds % 3600) / 60)
     local secs = seconds % 60
-    
     if hours > 0 then
         return string.format("%02d:%02d:%02d", hours, minutes, secs)
     else
@@ -128,7 +167,7 @@ local function formatTimeRemaining(seconds)
     end
 end
 
--- Fetch VIP IDs from GitHub
+-- Fetch VIP IDs
 local function fetchVIPIds()
     local success, response = pcall(function()
         return game:HttpGet(GITHUB_VIP_URL)
@@ -146,6 +185,24 @@ local function fetchVIPIds()
     return {}
 end
 
+-- Fetch Trial VIP Keys
+local function fetchTrialVIPKeys()
+    local success, response = pcall(function()
+        return game:HttpGet(TRIAL_VIP_URL)
+    end)
+    if success then
+        local keys = {}
+        for line in response:gmatch("[^\r\n]+") do
+            local key = line:match("^%s*(.-)%s*$")
+            if key ~= "" then
+                table.insert(keys, key)
+            end
+        end
+        return keys
+    end
+    return {}
+end
+
 -- Check if user is VIP
 local function isUserVIP(userId, vipIds)
     for _, vipId in ipairs(vipIds) do
@@ -156,7 +213,17 @@ local function isUserVIP(userId, vipIds)
     return false
 end
 
--- Validate key via web API with VIP detection
+-- Check if key is trial VIP
+local function isTrialVIPKey(key, trialKeys)
+    for _, trialKey in ipairs(trialKeys) do
+        if key == trialKey then
+            return true
+        end
+    end
+    return false
+end
+
+-- Validate key
 local function validateKey(key)
     if not key or type(key) ~= "string" then
         return false, "Invalid key", false
@@ -180,7 +247,7 @@ local function validateKey(key)
     end
 end
 
--- Get expiry time in readable format
+-- Get expiry time string
 local function getExpiryTimeString(expireTime)
     if expireTime then
         return os.date("%Y-%m-%d %H:%M:%S", expireTime)
@@ -189,7 +256,11 @@ local function getExpiryTimeString(expireTime)
 end
 
 -- Create UI
-local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
+local function createLoader(userType, playerName, keyExpireTime)
+    local isVIP = userType == "vip"
+    local isTrialVIP = userType == "trial"
+    local isFree = userType == "free"
+    
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "VIPLoader"
     ScreenGui.ResetOnSpawn = false
@@ -217,9 +288,9 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     BlurEffect.Size = 10
     BlurEffect.Parent = game.Lighting
 
-    -- Frame size
+    -- Frame size - FIXED: Proper sizing
     local frameWidth = isMobile() and 350 or 600
-    local frameHeight = isMobile() and math.floor(frameWidth / 16 * 9) or math.floor(600 / 16 * 9)
+    local frameHeight = isMobile() and 450 or 500
 
     -- Main Frame
     local MainFrame = Instance.new("Frame")
@@ -229,6 +300,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     MainFrame.BackgroundColor3 = Color3.fromRGB(15, 20, 45)
     MainFrame.BorderSizePixel = 0
     MainFrame.ZIndex = 2
+    MainFrame.ClipsDescendants = true
     MainFrame.Parent = ScreenGui
 
     Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 15)
@@ -253,8 +325,8 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     Instance.new("UICorner", AvatarFrame).CornerRadius = UDim.new(0.25, 0)
     
     local avatarStroke = Instance.new("UIStroke", AvatarFrame)
-    avatarStroke.Color = (isVIP or hasVIPKey) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(93, 173, 226)
-    avatarStroke.Thickness = (isVIP or hasVIPKey) and 3 or 2
+    avatarStroke.Color = (isVIP or isTrialVIP) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(93, 173, 226)
+    avatarStroke.Thickness = (isVIP or isTrialVIP) and 3 or 2
 
     local Avatar = Instance.new("ImageLabel")
     Avatar.BackgroundTransparency = 1
@@ -264,13 +336,13 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     Avatar.Parent = AvatarFrame
     Instance.new("UICorner", Avatar).CornerRadius = UDim.new(0.25, 0)
 
-    -- VIP Badge Icon
+    -- VIP Badge
     local VIPBadge = Instance.new("Frame")
     VIPBadge.Size = UDim2.new(0, isMobile() and 28 or 40, 0, isMobile() and 28 or 40)
     VIPBadge.Position = UDim2.new(0, isMobile() and -10 or -15, 0, isMobile() and -10 or -15)
     VIPBadge.BackgroundColor3 = Color3.fromRGB(10, 15, 35)
     VIPBadge.BorderSizePixel = 0
-    VIPBadge.Visible = isVIP or hasVIPKey
+    VIPBadge.Visible = isVIP or isTrialVIP
     VIPBadge.Parent = AvatarFrame
     Instance.new("UICorner", VIPBadge).CornerRadius = UDim.new(0.5, 0)
     
@@ -281,7 +353,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     local VIPIcon = Instance.new("TextLabel")
     VIPIcon.Size = UDim2.new(1, 0, 1, 0)
     VIPIcon.BackgroundTransparency = 1
-    VIPIcon.Text = "✨"
+    VIPIcon.Text = isTrialVIP and "⏳" or "✨"
     VIPIcon.TextSize = isMobile() and 18 or 24
     VIPIcon.Font = Enum.Font.GothamBold
     VIPIcon.Parent = VIPBadge
@@ -314,37 +386,36 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     StatusBadge.Size = UDim2.new(0.85, 0, 0, isMobile() and 55 or 65)
     StatusBadge.Position = UDim2.new(0.5, 0, 0, isMobile() and 168 or 238)
     StatusBadge.AnchorPoint = Vector2.new(0.5, 0)
-    StatusBadge.BackgroundColor3 = (isVIP or hasVIPKey) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(26, 32, 58)
-    StatusBadge.BackgroundTransparency = (isVIP or hasVIPKey) and 0.85 or 0.5
+    StatusBadge.BackgroundColor3 = (isVIP or isTrialVIP) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(26, 32, 58)
+    StatusBadge.BackgroundTransparency = (isVIP or isTrialVIP) and 0.85 or 0.5
     StatusBadge.BorderSizePixel = 0
     StatusBadge.Parent = LeftPanel
     Instance.new("UICorner", StatusBadge).CornerRadius = UDim.new(0, 10)
     
     local badgeStroke = Instance.new("UIStroke", StatusBadge)
-    badgeStroke.Color = (isVIP or hasVIPKey) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(93, 173, 226)
+    badgeStroke.Color = (isVIP or isTrialVIP) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(93, 173, 226)
     badgeStroke.Transparency = 0.5
     badgeStroke.Thickness = 2
 
-    -- Countdown icon/label
+    -- Status text
     local CountdownIcon = Instance.new("TextLabel")
     CountdownIcon.Size = UDim2.new(1, -10, 0, isMobile() and 20 or 24)
     CountdownIcon.Position = UDim2.new(0.5, 0, 0, 5)
     CountdownIcon.AnchorPoint = Vector2.new(0.5, 0)
     CountdownIcon.BackgroundTransparency = 1
-    CountdownIcon.Text = (isVIP or hasVIPKey) and "👑 VIP Status" or "⏱️ Key Expires In:"
-    CountdownIcon.TextColor3 = (isVIP or hasVIPKey) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(160, 174, 192)
+    CountdownIcon.Text = isVIP and "👑 VIP Status" or (isTrialVIP and "⏳ Trial VIP" or "⏱️ Key Expires In:")
+    CountdownIcon.TextColor3 = (isVIP or isTrialVIP) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(160, 174, 192)
     CountdownIcon.TextSize = isMobile() and 9 or 11
     CountdownIcon.Font = Enum.Font.GothamBold
     CountdownIcon.Parent = StatusBadge
 
-    -- Countdown Timer / VIP Label
     local CountdownLabel = Instance.new("TextLabel")
     CountdownLabel.Size = UDim2.new(1, -10, 0, isMobile() and 26 or 32)
     CountdownLabel.Position = UDim2.new(0.5, 0, 0, isMobile() and 25 or 29)
     CountdownLabel.AnchorPoint = Vector2.new(0.5, 0)
     CountdownLabel.BackgroundTransparency = 1
-    CountdownLabel.Text = (isVIP or hasVIPKey) and "LIFETIME" or ""
-    CountdownLabel.TextColor3 = (isVIP or hasVIPKey) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(46, 204, 113)
+    CountdownLabel.Text = isVIP and "LIFETIME" or ""
+    CountdownLabel.TextColor3 = (isVIP or isTrialVIP) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(46, 204, 113)
     CountdownLabel.TextSize = isMobile() and 14 or 18
     CountdownLabel.Font = Enum.Font.GothamBold
     CountdownLabel.Parent = StatusBadge
@@ -354,6 +425,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     RightPanel.Size = UDim2.new(0.65, 0, 1, 0)
     RightPanel.Position = UDim2.new(0.35, 0, 0, 0)
     RightPanel.BackgroundTransparency = 1
+    RightPanel.ClipsDescendants = true
     RightPanel.Parent = MainFrame
 
     -- Welcome Text
@@ -362,7 +434,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     WelcomeText.Position = UDim2.new(0.5, 0, 0, isMobile() and 15 or 25)
     WelcomeText.AnchorPoint = Vector2.new(0.5, 0)
     WelcomeText.BackgroundTransparency = 1
-    WelcomeText.Text = (isVIP or hasVIPKey) and "WELCOME VIP" or "WELCOME FREE"
+    WelcomeText.Text = isVIP and "WELCOME VIP" or (isTrialVIP and "TRIAL VIP" or "WELCOME FREE")
     WelcomeText.TextColor3 = Color3.fromRGB(255, 215, 0)
     WelcomeText.TextSize = isMobile() and 20 or 28
     WelcomeText.Font = Enum.Font.GothamBold
@@ -375,7 +447,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     Subtitle.Position = UDim2.new(0.5, 0, 0, isMobile() and 45 or 65)
     Subtitle.AnchorPoint = Vector2.new(0.5, 0)
     Subtitle.BackgroundTransparency = 1
-    Subtitle.Text = (isVIP or hasVIPKey) and "Lifetime Premium Access" or "Premium Access System"
+    Subtitle.Text = isVIP and "Lifetime Premium Access" or (isTrialVIP and "1 Hour VIP Access" or "Limited Access")
     Subtitle.TextColor3 = Color3.fromRGB(160, 174, 192)
     Subtitle.TextSize = isMobile() and 9 or 12
     Subtitle.Font = Enum.Font.Gotham
@@ -387,7 +459,7 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     AuthContainer.Position = UDim2.new(0.5, 0, 0, isMobile() and 75 or 100)
     AuthContainer.AnchorPoint = Vector2.new(0.5, 0)
     AuthContainer.BackgroundTransparency = 1
-    AuthContainer.Visible = not (isVIP or hasVIPKey)
+    AuthContainer.Visible = isFree
     AuthContainer.Parent = RightPanel
 
     local KeyLabel = Instance.new("TextLabel")
@@ -440,21 +512,22 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     StatusText.Visible = false
     StatusText.Parent = AuthContainer
 
-    -- Map Container
+    -- Map Container - FIXED: Better scrolling
     local MapContainer = Instance.new("Frame")
-    MapContainer.Size = UDim2.new(1, -30, 1, -30)
-    MapContainer.Position = UDim2.new(0, 15, 0, 15)
+    MapContainer.Size = UDim2.new(1, -30, 1, isMobile() and -80 or -100)
+    MapContainer.Position = UDim2.new(0, 15, 0, isMobile() and 70 or 90)
     MapContainer.BackgroundTransparency = 1
-    MapContainer.Visible = false
+    MapContainer.Visible = not isFree
+    MapContainer.ClipsDescendants = true
     MapContainer.Parent = RightPanel
 
-    -- Scrollable maps
     local MapsScrollFrame = Instance.new("ScrollingFrame")
     MapsScrollFrame.Size = UDim2.new(1, 0, 1, 0)
     MapsScrollFrame.BackgroundTransparency = 1
     MapsScrollFrame.ScrollBarThickness = isMobile() and 4 or 6
     MapsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     MapsScrollFrame.BorderSizePixel = 0
+    MapsScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 215, 0)
     MapsScrollFrame.Parent = MapContainer
 
     local MapsFrame = Instance.new("Frame")
@@ -463,65 +536,36 @@ local function createLoader(isVIP, hasVIPKey, playerName, keyExpireTime)
     MapsFrame.Parent = MapsScrollFrame
 
     local MapsLayout = Instance.new("UIGridLayout")
-    MapsLayout.CellSize = UDim2.new(0.48, 0, 0, isMobile() and 90 or 120)
-    MapsLayout.CellPadding = UDim2.new(0.04, 0, 0, isMobile() and 10 or 15)
+    MapsLayout.CellSize = UDim2.new(0.48, 0, 0, isMobile() and 80 or 100)
+    MapsLayout.CellPadding = UDim2.new(0.04, 0, 0, isMobile() and 8 or 12)
     MapsLayout.SortOrder = Enum.SortOrder.LayoutOrder
     MapsLayout.Parent = MapsFrame
 
     local function updateCanvasSize()
-        MapsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, MapsLayout.AbsoluteContentSize.Y + 20)
+        local contentHeight = MapsLayout.AbsoluteContentSize.Y
+        MapsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, contentHeight + 10)
     end
     MapsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
-    task.wait(0.05)
-    updateCanvasSize()
 
-    -- Pargoy Button
-    local PargoyButton = Instance.new("TextButton")
-    PargoyButton.BackgroundColor3 = Color3.fromRGB(93, 173, 226)
-    PargoyButton.BackgroundTransparency = 0.8
-    PargoyButton.Text = ""
-    PargoyButton.Parent = MapsFrame
-    PargoyButton.LayoutOrder = 1
-    Instance.new("UICorner", PargoyButton).CornerRadius = UDim.new(0, 12)
-    Instance.new("UIStroke", PargoyButton).Color = Color3.fromRGB(93, 173, 226)
-
-    local PargoyIcon = Instance.new("TextLabel")
-    PargoyIcon.Size = UDim2.new(1, 0, 0, isMobile() and 35 or 50)
-    PargoyIcon.Position = UDim2.new(0, 0, 0, isMobile() and 10 or 15)
-    PargoyIcon.BackgroundTransparency = 1
-    PargoyIcon.Text = "🏔️"
-    PargoyIcon.TextSize = isMobile() and 25 or 35
-    PargoyIcon.Font = Enum.Font.GothamBold
-    PargoyIcon.Parent = PargoyButton
-
-    local PargoyText = Instance.new("TextLabel")
-    PargoyText.Size = UDim2.new(1, 0, 0, isMobile() and 25 or 30)
-    PargoyText.Position = UDim2.new(0, 0, 1, isMobile() and -30 or -35)
-    PargoyText.BackgroundTransparency = 1
-    PargoyText.Text = "PARGOY"
-    PargoyText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    PargoyText.TextSize = isMobile() and 11 or 14
-    PargoyText.Font = Enum.Font.GothamBold
-    PargoyText.Parent = PargoyButton
-
-    return ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge, avatarStroke, VIPBadge, badgeStroke
+    return ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge, avatarStroke, VIPBadge, badgeStroke, VIPIcon, MapsFrame, MapsScrollFrame
 end
 
--- Show status helper
+-- Show status
 local function showStatus(label, msg, success)
     label.Visible = true
     label.Text = msg
     label.TextColor3 = success and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
 end
 
--- Upgrade to VIP visuals
-local function upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
-    WelcomeText.Text = "WELCOME VIP"
-    Subtitle.Text = "Lifetime Premium Access"
-    CountdownIcon.Text = "👑 VIP Status"
+-- Upgrade to VIP
+local function upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke, VIPIcon, isTrial)
+    WelcomeText.Text = isTrial and "TRIAL VIP" or "WELCOME VIP"
+    Subtitle.Text = isTrial and "1 Hour VIP Access" or "Lifetime Premium Access"
+    CountdownIcon.Text = isTrial and "⏳ Trial VIP" or "👑 VIP Status"
     CountdownIcon.TextColor3 = Color3.fromRGB(255, 215, 0)
-    CountdownLabel.Text = "LIFETIME"
+    CountdownLabel.Text = isTrial and "" or "LIFETIME"
     CountdownLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+    VIPIcon.Text = isTrial and "⏳" or "✨"
     
     TweenService:Create(StatusBadge, TweenInfo.new(0.5), {
         BackgroundColor3 = Color3.fromRGB(255, 215, 0),
@@ -543,10 +587,10 @@ local function upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel
         Size = UDim2.new(0, isMobile() and 28 or 40, 0, isMobile() and 28 or 40)
     }):Play()
     
-    print("🎉 Upgraded to VIP - UI updated!")
+    print("🎉 Upgraded to " .. (isTrial and "Trial VIP" or "VIP") .. " - UI updated!")
 end
 
--- Check if user became VIP
+-- Check VIP upgrade
 local function checkVIPUpgrade()
     local vipIds = fetchVIPIds()
     local isVIP = isUserVIP(userId, vipIds)
@@ -561,13 +605,7 @@ local function checkVIPUpgrade()
 end
 
 -- Load map
-local function loadMap(mapName, gui, blur)
-    local url = MAP_SCRIPTS[mapName]
-    if not url then 
-        warn("❌ Map script not found for:", mapName)
-        return 
-    end
-
+local function loadMap(mapName, mapUrl, gui, blur)
     local main = gui:FindFirstChild("MainFrame")
     if main then
         TweenService:Create(main, TweenInfo.new(0.5), {
@@ -579,7 +617,7 @@ local function loadMap(mapName, gui, blur)
     task.wait(0.5)
     
     local success, err = pcall(function()
-        loadstring(game:HttpGet(url))()
+        loadstring(game:HttpGet(mapUrl))()
     end)
     
     if not success then
@@ -592,34 +630,117 @@ local function loadMap(mapName, gui, blur)
     gui:Destroy()
 end
 
+-- Create map buttons
+local function createMapButtons(mapsFrame, mapsList, gui, blur)
+    local buttons = {}
+    
+    for i, mapData in ipairs(mapsList) do
+        local MapButton = Instance.new("TextButton")
+        MapButton.BackgroundColor3 = Color3.fromRGB(93, 173, 226)
+        MapButton.BackgroundTransparency = 0.8
+        MapButton.Text = ""
+        MapButton.LayoutOrder = i
+        MapButton.Parent = mapsFrame
+        Instance.new("UICorner", MapButton).CornerRadius = UDim.new(0, 12)
+        local btnStroke = Instance.new("UIStroke", MapButton)
+        btnStroke.Color = Color3.fromRGB(93, 173, 226)
+        btnStroke.Thickness = 2
+
+        local MapIcon = Instance.new("TextLabel")
+        MapIcon.Size = UDim2.new(1, 0, 0, isMobile() and 30 or 40)
+        MapIcon.Position = UDim2.new(0, 0, 0, isMobile() and 8 or 12)
+        MapIcon.BackgroundTransparency = 1
+        MapIcon.Text = mapData.icon
+        MapIcon.TextSize = isMobile() and 20 or 28
+        MapIcon.Font = Enum.Font.GothamBold
+        MapIcon.Parent = MapButton
+
+        local MapText = Instance.new("TextLabel")
+        MapText.Size = UDim2.new(1, 0, 0, isMobile() and 20 or 25)
+        MapText.Position = UDim2.new(0, 0, 1, isMobile() and -25 or -30)
+        MapText.BackgroundTransparency = 1
+        MapText.Text = mapData.name
+        MapText.TextColor3 = Color3.fromRGB(255, 255, 255)
+        MapText.TextSize = isMobile() and 10 or 12
+        MapText.Font = Enum.Font.GothamBold
+        MapText.Parent = MapButton
+
+        MapButton.MouseButton1Click:Connect(function()
+            loadMap(mapData.name, mapData.url, gui, blur)
+        end)
+        
+        -- Hover effect
+        MapButton.MouseEnter:Connect(function()
+            TweenService:Create(MapButton, TweenInfo.new(0.2), {BackgroundTransparency = 0.5}):Play()
+            TweenService:Create(btnStroke, TweenInfo.new(0.2), {Transparency = 0.3, Thickness = 3}):Play()
+        end)
+        MapButton.MouseLeave:Connect(function()
+            TweenService:Create(MapButton, TweenInfo.new(0.2), {BackgroundTransparency = 0.8}):Play()
+            TweenService:Create(btnStroke, TweenInfo.new(0.2), {Transparency = 0, Thickness = 2}):Play()
+        end)
+        
+        table.insert(buttons, MapButton)
+    end
+    
+    return buttons
+end
+
 -- Main
 local function main()
     local vipIds = fetchVIPIds()
+    local trialKeys = fetchTrialVIPKeys()
     local isVIP = isUserVIP(userId, vipIds)
     local hasVIPKey, vipKey = loadVIPData()
+    local hasTrialVIP, trialKey, trialExpire = loadTrialVIPData()
     local keyValid, expireTime = isKeyValid()
 
-    local hasAccess = isVIP or hasVIPKey or keyValid
-    local isLifetimeAccess = isVIP or hasVIPKey
-
-    print("User:", LocalPlayer.Name, "| ID:", userId)
-    print("Status:", isVIP and "VIP (ID)" or (hasVIPKey and "VIP (Key)" or (keyValid and "Validated" or "Free")))
-    if isLifetimeAccess then
-        print("✅ Lifetime Access Granted")
+    local userType = "free"
+    local keyExpireTime = nil
+    
+    if isVIP or hasVIPKey then
+        userType = "vip"
+    elseif hasTrialVIP then
+        userType = "trial"
+        keyExpireTime = trialExpire
     elseif keyValid then
-        print("✅ Key valid until: " .. getExpiryTimeString(expireTime))
+        userType = "free"
+        keyExpireTime = expireTime
     end
 
-    local ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, PargoyButton, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge, avatarStroke, VIPBadge, badgeStroke = createLoader(isVIP, hasVIPKey, LocalPlayer.Name, expireTime)
+    print("User:", LocalPlayer.Name, "| ID:", userId)
+    print("Status:", userType == "vip" and "VIP" or (userType == "trial" and "Trial VIP" or "Free"))
+    if keyExpireTime then
+        print("✅ Access until: " .. getExpiryTimeString(keyExpireTime))
+    end
 
-    -- Auto VIP upgrade checker
+    local ScreenGui, MainFrame, Overlay, BlurEffect, AuthContainer, MapContainer, KeyInput, VerifyButton, StatusText, WelcomeText, Subtitle, CountdownLabel, CountdownIcon, StatusBadge, avatarStroke, VIPBadge, badgeStroke, VIPIcon, MapsFrame, MapsScrollFrame = createLoader(userType, LocalPlayer.Name, keyExpireTime)
+
+    -- Create map buttons based on user type
+    local mapsList = (userType == "vip" or userType == "trial") and ALL_MAPS or FREE_MAPS
+    createMapButtons(MapsFrame, mapsList, ScreenGui, BlurEffect)
+    
+    task.wait(0.1)
+    MapsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, MapsFrame.UIGridLayout.AbsoluteContentSize.Y + 10)
+
+    -- VIP upgrade checker
     local vipCheckConnection
-    if not isLifetimeAccess and keyValid then
+    if userType ~= "vip" then
         vipCheckConnection = task.spawn(function()
             while true do
                 task.wait(30)
                 if checkVIPUpgrade() then
-                    upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
+                    upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke, VIPIcon, false)
+                    MapContainer.Visible = false
+                    task.wait(0.1)
+                    for _, child in ipairs(MapsFrame:GetChildren()) do
+                        if child:IsA("TextButton") then
+                            child:Destroy()
+                        end
+                    end
+                    createMapButtons(MapsFrame, ALL_MAPS, ScreenGui, BlurEffect)
+                    task.wait(0.1)
+                    MapsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, MapsFrame.UIGridLayout.AbsoluteContentSize.Y + 10)
+                    MapContainer.Visible = true
                     if countdownConnection then
                         countdownConnection:Disconnect()
                     end
@@ -629,29 +750,29 @@ local function main()
         end)
     end
 
-    -- Countdown update loop
+    -- Countdown
     local countdownConnection
-    if keyValid and not isLifetimeAccess and expireTime then
+    if keyExpireTime and userType ~= "vip" then
         countdownConnection = game:GetService("RunService").Heartbeat:Connect(function()
-            local timeRemaining = expireTime - os.time()
+            local timeRemaining = keyExpireTime - os.time()
             if timeRemaining > 0 then
                 CountdownLabel.Text = formatTimeRemaining(timeRemaining)
                 
-                if timeRemaining <= 3600 then
+                if timeRemaining <= 600 then
                     CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
                     StatusBadge.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
                     StatusBadge.BackgroundTransparency = 0.85
                     badgeStroke.Color = Color3.fromRGB(231, 76, 60)
-                elseif timeRemaining <= 10800 then
+                elseif timeRemaining <= 1800 then
                     CountdownLabel.TextColor3 = Color3.fromRGB(230, 126, 34)
                     StatusBadge.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
                     StatusBadge.BackgroundTransparency = 0.85
                     badgeStroke.Color = Color3.fromRGB(230, 126, 34)
                 else
-                    CountdownLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
-                    StatusBadge.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+                    CountdownLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+                    StatusBadge.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
                     StatusBadge.BackgroundTransparency = 0.85
-                    badgeStroke.Color = Color3.fromRGB(93, 173, 226)
+                    badgeStroke.Color = Color3.fromRGB(255, 215, 0)
                 end
             else
                 CountdownLabel.Text = "EXPIRED"
@@ -662,7 +783,11 @@ local function main()
                 if vipCheckConnection then
                     task.cancel(vipCheckConnection)
                 end
-                deleteKeyData()
+                if userType == "trial" then
+                    delfile(TRIAL_STORAGE_FILE)
+                else
+                    deleteKeyData()
+                end
                 task.wait(2)
                 if ScreenGui then ScreenGui:Destroy() end
                 if BlurEffect then BlurEffect:Destroy() end
@@ -671,22 +796,13 @@ local function main()
         end)
     end
 
-    -- Animate in
+    -- Animate
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     MainFrame.BackgroundTransparency = 1
     TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
-        Size = UDim2.new(0, isMobile() and 350 or 600, 0, isMobile() and math.floor(350/16*9) or math.floor(600/16*9)),
+        Size = UDim2.new(0, isMobile() and 350 or 600, 0, isMobile() and 450 or 500),
         BackgroundTransparency = 0
     }):Play()
-
-    -- If has access, show maps immediately
-    if hasAccess then
-        task.wait(0.6)
-        WelcomeText.Visible = false
-        Subtitle.Visible = false
-        AuthContainer.Visible = false
-        MapContainer.Visible = true
-    end
 
     -- Verify button
     VerifyButton.MouseButton1Click:Connect(function()
@@ -700,6 +816,65 @@ local function main()
         StatusText.TextColor3 = Color3.fromRGB(255, 215, 0)
 
         task.spawn(function()
+            -- Check if trial VIP key
+            local isTrialKey = isTrialVIPKey(key, trialKeys)
+            
+            if isTrialKey then
+                local newExpireTime = os.time() + TRIAL_DURATION
+                saveTrialVIPData(key, newExpireTime)
+                showStatus(StatusText, "✓ Trial VIP Activated!\n1 Hour Access", true)
+                task.wait(1.5)
+                
+                upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke, VIPIcon, true)
+                
+                AuthContainer.Visible = false
+                MapContainer.Visible = false
+                
+                for _, child in ipairs(MapsFrame:GetChildren()) do
+                    if child:IsA("TextButton") then
+                        child:Destroy()
+                    end
+                end
+                createMapButtons(MapsFrame, ALL_MAPS, ScreenGui, BlurEffect)
+                task.wait(0.1)
+                MapsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, MapsFrame.UIGridLayout.AbsoluteContentSize.Y + 10)
+                MapContainer.Visible = true
+                
+                if countdownConnection then
+                    countdownConnection:Disconnect()
+                end
+                
+                countdownConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                    local timeRemaining = newExpireTime - os.time()
+                    if timeRemaining > 0 then
+                        CountdownLabel.Text = formatTimeRemaining(timeRemaining)
+                        
+                        if timeRemaining <= 600 then
+                            CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
+                            StatusBadge.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+                            badgeStroke.Color = Color3.fromRGB(231, 76, 60)
+                        elseif timeRemaining <= 1800 then
+                            CountdownLabel.TextColor3 = Color3.fromRGB(230, 126, 34)
+                            StatusBadge.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
+                            badgeStroke.Color = Color3.fromRGB(230, 126, 34)
+                        else
+                            CountdownLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+                        end
+                    else
+                        if countdownConnection then
+                            countdownConnection:Disconnect()
+                        end
+                        delfile(TRIAL_STORAGE_FILE)
+                        task.wait(2)
+                        if ScreenGui then ScreenGui:Destroy() end
+                        if BlurEffect then BlurEffect:Destroy() end
+                        main()
+                    end
+                end)
+                return
+            end
+            
+            -- Regular key validation
             local ok, err, isVIPKey = validateKey(key)
             if ok then
                 if isVIPKey then
@@ -707,7 +882,7 @@ local function main()
                     showStatus(StatusText, "✓ VIP Access Granted!\nLifetime Access", true)
                     task.wait(1.5)
                     
-                    upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
+                    upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke, VIPIcon, false)
                     
                     if countdownConnection then
                         countdownConnection:Disconnect()
@@ -715,92 +890,32 @@ local function main()
                     if vipCheckConnection then
                         task.cancel(vipCheckConnection)
                     end
+                    
+                    AuthContainer.Visible = false
+                    MapContainer.Visible = false
+                    
+                    for _, child in ipairs(MapsFrame:GetChildren()) do
+                        if child:IsA("TextButton") then
+                            child:Destroy()
+                        end
+                    end
+                    createMapButtons(MapsFrame, ALL_MAPS, ScreenGui, BlurEffect)
+                    task.wait(0.1)
+                    MapsScrollFrame.CanvasSize = UDim2.new(0, 0, 0, MapsFrame.UIGridLayout.AbsoluteContentSize.Y + 10)
+                    MapContainer.Visible = true
                 else
                     local newExpireTime = os.time() + KEY_DURATION
                     saveKeyData(key, newExpireTime)
-                    
-                    local expiryTimeStr = getExpiryTimeString(newExpireTime)
-                    showStatus(StatusText, "✓ Access granted!\nExpires: " .. expiryTimeStr, true)
+                    showStatus(StatusText, "✓ Access granted!\nFree user - 1 map only", true)
                     task.wait(1.5)
-
-                    if countdownConnection then
-                        countdownConnection:Disconnect()
-                    end
                     
-                    if vipCheckConnection then
-                        task.cancel(vipCheckConnection)
-                    end
-                    vipCheckConnection = task.spawn(function()
-                        while true do
-                            task.wait(30)
-                            if checkVIPUpgrade() then
-                                upgradeToVIP(WelcomeText, Subtitle, CountdownIcon, CountdownLabel, StatusBadge, avatarStroke, VIPBadge, badgeStroke)
-                                if countdownConnection then
-                                    countdownConnection:Disconnect()
-                                end
-                                break
-                            end
-                        end
-                    end)
-                    
-                    countdownConnection = game:GetService("RunService").Heartbeat:Connect(function()
-                        local timeRemaining = newExpireTime - os.time()
-                        if timeRemaining > 0 then
-                            CountdownLabel.Text = formatTimeRemaining(timeRemaining)
-                            
-                            if timeRemaining <= 3600 then
-                                CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
-                                StatusBadge.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-                                StatusBadge.BackgroundTransparency = 0.85
-                                badgeStroke.Color = Color3.fromRGB(231, 76, 60)
-                            elseif timeRemaining <= 10800 then
-                                CountdownLabel.TextColor3 = Color3.fromRGB(230, 126, 34)
-                                StatusBadge.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
-                                StatusBadge.BackgroundTransparency = 0.85
-                                badgeStroke.Color = Color3.fromRGB(230, 126, 34)
-                            else
-                                CountdownLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
-                                StatusBadge.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-                                StatusBadge.BackgroundTransparency = 0.85
-                                badgeStroke.Color = Color3.fromRGB(93, 173, 226)
-                            end
-                        else
-                            CountdownLabel.Text = "EXPIRED"
-                            CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
-                            if countdownConnection then
-                                countdownConnection:Disconnect()
-                            end
-                            if vipCheckConnection then
-                                task.cancel(vipCheckConnection)
-                            end
-                            deleteKeyData()
-                            task.wait(2)
-                            if ScreenGui then ScreenGui:Destroy() end
-                            if BlurEffect then BlurEffect:Destroy() end
-                            main()
-                        end
-                    end)
+                    AuthContainer.Visible = false
+                    MapContainer.Visible = true
                 end
-                
-                WelcomeText.Visible = false
-                Subtitle.Visible = false
-                AuthContainer.Visible = false
-                MapContainer.Visible = true
             else
                 showStatus(StatusText, "✗ " .. (err or "Invalid key"), false)
             end
         end)
-    end)
-
-    -- Map button (FIXED - only Pargoy exists)
-    PargoyButton.MouseButton1Click:Connect(function() 
-        if countdownConnection then
-            countdownConnection:Disconnect()
-        end
-        if vipCheckConnection then
-            task.cancel(vipCheckConnection)
-        end
-        loadMap("Pargoy", ScreenGui, BlurEffect) 
     end)
 
     -- Hover effects
@@ -818,7 +933,6 @@ local function main()
         end)
     end
     hover(VerifyButton)
-    hover(PargoyButton)
 
     -- Input focus
     KeyInput.Focused:Connect(function()
@@ -830,7 +944,7 @@ local function main()
         if s then TweenService:Create(s, TweenInfo.new(0.2), {Transparency = 0.7, Thickness = 2}):Play() end
     end)
     
-    -- Cleanup on GUI destroy
+    -- Cleanup
     ScreenGui.Destroying:Connect(function()
         if countdownConnection then
             countdownConnection:Disconnect()
@@ -843,7 +957,9 @@ end
 
 -- Run
 main()
-print("✅ VIP Loader v10.1 - FIXED | Device:", isMobile() and "Mobile" or "Desktop")
+print("✅ VIP Loader v11.0 - UPDATED | Device:", isMobile() and "Mobile" or "Desktop")
 print("📁 Storage location: " .. STORAGE_FOLDER)
-print("👑 VIP keys grant lifetime access - Regular keys last 24 hours")
+print("👑 VIP keys: Lifetime access (All maps)")
+print("⏳ Trial VIP keys: 1 hour access (All maps)")
+print("🆓 Free users: Limited to ARUNIKA map only")
 print("🔄 Auto VIP upgrade check every 30 seconds")
