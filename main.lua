@@ -1,4 +1,4 @@
--- VIP Loader System v11.0 - UPDATED
+-- VIP Loader System v11.0 - COMPLETE
 -- Connected to: https://astrion-keycrate.vercel.app/api/validate
 
 local Players = game:GetService("Players")
@@ -288,9 +288,9 @@ local function createLoader(userType, playerName, keyExpireTime)
     BlurEffect.Size = 10
     BlurEffect.Parent = game.Lighting
 
-    -- Frame size - FIXED: Proper sizing
+    -- Frame size - FIXED: Perfect 16:9 ratio
     local frameWidth = isMobile() and 350 or 600
-    local frameHeight = isMobile() and 450 or 500
+    local frameHeight = math.floor(frameWidth / 16 * 9)
 
     -- Main Frame
     local MainFrame = Instance.new("Frame")
@@ -512,10 +512,10 @@ local function createLoader(userType, playerName, keyExpireTime)
     StatusText.Visible = false
     StatusText.Parent = AuthContainer
 
-    -- Map Container - FIXED: Better scrolling
+    -- Map Container - FIXED: Responsive with proper spacing
     local MapContainer = Instance.new("Frame")
-    MapContainer.Size = UDim2.new(1, -30, 1, isMobile() and -80 or -100)
-    MapContainer.Position = UDim2.new(0, 15, 0, isMobile() and 70 or 90)
+    MapContainer.Size = UDim2.new(1, -30, 1, isMobile() and -70 or -95)
+    MapContainer.Position = UDim2.new(0, 15, 0, isMobile() and 65 or 90)
     MapContainer.BackgroundTransparency = 1
     MapContainer.Visible = not isFree
     MapContainer.ClipsDescendants = true
@@ -536,8 +536,8 @@ local function createLoader(userType, playerName, keyExpireTime)
     MapsFrame.Parent = MapsScrollFrame
 
     local MapsLayout = Instance.new("UIGridLayout")
-    MapsLayout.CellSize = UDim2.new(0.48, 0, 0, isMobile() and 80 or 100)
-    MapsLayout.CellPadding = UDim2.new(0.04, 0, 0, isMobile() and 8 or 12)
+    MapsLayout.CellSize = UDim2.new(0.48, 0, 0, isMobile() and 75 or 90)
+    MapsLayout.CellPadding = UDim2.new(0.04, 0, 0, isMobile() and 6 or 10)
     MapsLayout.SortOrder = Enum.SortOrder.LayoutOrder
     MapsLayout.Parent = MapsFrame
 
@@ -647,21 +647,21 @@ local function createMapButtons(mapsFrame, mapsList, gui, blur)
         btnStroke.Thickness = 2
 
         local MapIcon = Instance.new("TextLabel")
-        MapIcon.Size = UDim2.new(1, 0, 0, isMobile() and 30 or 40)
-        MapIcon.Position = UDim2.new(0, 0, 0, isMobile() and 8 or 12)
+        MapIcon.Size = UDim2.new(1, 0, 0, isMobile() and 28 or 35)
+        MapIcon.Position = UDim2.new(0, 0, 0, isMobile() and 6 or 10)
         MapIcon.BackgroundTransparency = 1
         MapIcon.Text = mapData.icon
-        MapIcon.TextSize = isMobile() and 20 or 28
+        MapIcon.TextSize = isMobile() and 18 or 24
         MapIcon.Font = Enum.Font.GothamBold
         MapIcon.Parent = MapButton
 
         local MapText = Instance.new("TextLabel")
-        MapText.Size = UDim2.new(1, 0, 0, isMobile() and 20 or 25)
-        MapText.Position = UDim2.new(0, 0, 1, isMobile() and -25 or -30)
+        MapText.Size = UDim2.new(1, 0, 0, isMobile() and 18 or 22)
+        MapText.Position = UDim2.new(0, 0, 1, isMobile() and -22 or -27)
         MapText.BackgroundTransparency = 1
         MapText.Text = mapData.name
         MapText.TextColor3 = Color3.fromRGB(255, 255, 255)
-        MapText.TextSize = isMobile() and 10 or 12
+        MapText.TextSize = isMobile() and 9 or 11
         MapText.Font = Enum.Font.GothamBold
         MapText.Parent = MapButton
 
@@ -800,7 +800,7 @@ local function main()
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     MainFrame.BackgroundTransparency = 1
     TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
-        Size = UDim2.new(0, isMobile() and 350 or 600, 0, isMobile() and 450 or 500),
+        Size = UDim2.new(0, frameWidth, 0, frameHeight),
         BackgroundTransparency = 0
     }):Play()
 
@@ -957,9 +957,9 @@ end
 
 -- Run
 main()
-print("✅ VIP Loader v11.0 - UPDATED | Device:", isMobile() and "Mobile" or "Desktop")
+print("✅ VIP Loader v11.0 - COMPLETE | Device:", isMobile() and "Mobile" or "Desktop")
 print("📁 Storage location: " .. STORAGE_FOLDER)
-print("👑 VIP keys: Lifetime access (All maps)")
-print("⏳ Trial VIP keys: 1 hour access (All maps)")
+print("👑 VIP keys: Lifetime access (All 7 maps)")
+print("⏳ Trial VIP keys: 1 hour access (All 7 maps)")
 print("🆓 Free users: Limited to ARUNIKA map only")
 print("🔄 Auto VIP upgrade check every 30 seconds")
