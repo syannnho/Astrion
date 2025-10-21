@@ -37,6 +37,7 @@ local STORAGE_FOLDER = "AstrionKeys"
 local STORAGE_FILE = STORAGE_FOLDER .. "/key_" .. userId .. ".json"
 local VIP_STORAGE_FILE = STORAGE_FOLDER .. "/vip_" .. userId .. ".json"
 local TRIAL_STORAGE_FILE = STORAGE_FOLDER .. "/trial_" .. userId .. ".json"
+local TRIAL_USAGE_FILE = STORAGE_FOLDER .. "/trial_used_" .. userId .. ".json"
 
 -- Key durations
 local KEY_DURATION = 86400 -- 24 hours
@@ -78,8 +79,67 @@ local function saveTrialVIPData(key, expireTime)
         activatedAt = os.time()
     }
     writefile(TRIAL_STORAGE_FILE, HttpService:JSONEncode(data))
+    
+    -- Save trial usage record
+    local usageData = {
+        usedKey = key,
+        userId = userId,
+        usedAt = os.time()
+    }
+    writefile(TRIAL_USAGE_FILE, HttpService:JSONEncode(usageData))
+    
     if isfile(STORAGE_FILE) then delfile(STORAGE_FILE) end
     print("✅ Trial VIP Key saved - 1 Hour Access")
+end
+
+local function getUsedTrialKey()
+    if isfile(TRIAL_USAGE_FILE) then
+        local success, data = pcall(function()
+            return HttpService:JSONDecode(readfile(TRIAL_USAGE_FILE))
+        end)
+        if success and data then
+            return data.usedKey
+        end
+    end
+    return nil
+end
+
+local function canUseTrialKey(key, currentTrialKeys)
+    -- Check if user already used a trial key
+    local usedKey = getUsedTrialKey()
+    
+    if usedKey then
+        -- Check if the used key still exists in the trial keys list
+        local keyStillExists = false
+        for _, trialKey in ipairs(currentTrialKeys) do
+            if trialKey == usedKey then
+                keyStillExists = true
+                break
+            end
+        end
+        
+        -- If old key removed from list, allow new trial
+        if not keyStillExists then
+            if isfile(TRIAL_USAGE_FILE) then
+                delfile(TRIAL_USAGE_FILE)
+            end
+            print("🔄 Old trial key removed, new trial allowed")
+            return true
+        end
+        
+        -- If trying to use same key, check if expired
+        if key == usedKey then
+            local hasTrialVIP, _, trialExpire = loadTrialVIPData()
+            if hasTrialVIP and os.time() < trialExpire then
+                return false, "Trial VIP already active"
+            end
+            return false, "Trial key already used. Wait for key rotation."
+        end
+        
+        return false, "You already used a trial key. Wait for key rotation."
+    end
+    
+    return true
 end
 
 local function loadVIPData()
@@ -822,6 +882,14 @@ local function main()
             local isTrialKey = isTrialVIPKey(key, trialKeys)
             
             if isTrialKey then
+                -- Check if user can use trial key
+                local canUse, errorMsg = canUseTrialKey(key, trialKeys)
+                
+                if not canUse then
+                    showStatus(StatusText, "✗ " .. errorMsg, false)
+                    return
+                end
+                
                 local newExpireTime = os.time() + TRIAL_DURATION
                 saveTrialVIPData(key, newExpireTime)
                 showStatus(StatusText, "✓ Trial VIP Activated!\n1 Hour Access", true)
@@ -847,8 +915,12 @@ local function main()
                     countdownConnection = nil
                 end
                 
+                -- Set initial countdown
+                CountdownLabel.Text = formatTimeRemaining(newExpireTime - os.time())
+                CountdownLabel.Visible = true
+                
                 countdownConnection = game:GetService("RunService").Heartbeat:Connect(function()
-                    if not ScreenGui or not ScreenGui.Parent then
+                    if not ScreenGui or not ScreenGui.Parent or not CountdownLabel then
                         if countdownConnection then
                             countdownConnection:Disconnect()
                             countdownConnection = nil
@@ -859,6 +931,7 @@ local function main()
                     local timeRemaining = newExpireTime - os.time()
                     if timeRemaining > 0 then
                         CountdownLabel.Text = formatTimeRemaining(timeRemaining)
+                        CountdownLabel.Visible = true
                         
                         if timeRemaining <= 600 then
                             CountdownLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
@@ -872,6 +945,8 @@ local function main()
                             CountdownLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
                         end
                     else
+                        CountdownLabel.Text = "EXPIRED"
+                        CountdownLabel.Visible = true
                         if countdownConnection then
                             countdownConnection:Disconnect()
                             countdownConnection = nil
@@ -981,9 +1056,10 @@ end
 
 -- Run
 main()
-print("✅ VIP Loader v11.0 - COMPLETE | Device:", isMobile() and "Mobile" or "Desktop")
+print("✅ VIP Loader v11.1 - COMPLETE | Device:", isMobile() and "Mobile" or "Desktop")
 print("📁 Storage location: " .. STORAGE_FOLDER)
 print("👑 VIP keys: Lifetime access (All 7 maps)")
-print("⏳ Trial VIP keys: 1 hour access (All 7 maps)")
+print("⏳ Trial VIP keys: 1 hour access (All 7 maps) - ONE TIME USE PER ID")
 print("🆓 Free users: Limited to ARUNIKA map only")
 print("🔄 Auto VIP upgrade check every 30 seconds")
+print("🔒 Trial key system: 1 key per user ID until key rotation")
