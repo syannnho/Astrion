@@ -1336,7 +1336,7 @@ CreditsTab:Section({
 CreditsTab:Space()
 
 CreditsTab:Section({
-    Title = "Follow Tiktok: @rullzsy99",
+    Title = "Follow Tiktok: @Jinho",
     TextSize = 14,
     TextTransparency = 0.4,
 })
