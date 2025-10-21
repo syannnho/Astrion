@@ -142,6 +142,105 @@ end
 StartAntiIdle()
 SetupCharacterListener()
 
+
+-------------------------------------------------------------
+-- MAIN TAB
+-------------------------------------------------------------
+local MainTab = Window:Tab({
+    Title = "Main",
+    Icon = "home"
+})
+
+local MainSection = MainTab:Section({
+    Title = "Player Features"
+})
+
+-- God Mode Variables
+getgenv().GodModeActive = false
+local originalMaxHealth = 100
+local godModeConnection = nil
+
+local function EnableGodMode()
+    if not humanoid then return end
+    
+    -- Save original max health
+    originalMaxHealth = humanoid.MaxHealth
+    
+    -- Set high health values
+    humanoid.MaxHealth = math.huge
+    humanoid.Health = math.huge
+    
+    -- Prevent health changes
+    if godModeConnection then
+        godModeConnection:Disconnect()
+    end
+    
+    godModeConnection = humanoid.HealthChanged:Connect(function(health)
+        if getgenv().GodModeActive and health < math.huge then
+            humanoid.Health = math.huge
+        end
+    end)
+    
+    -- Disable fall damage
+    pcall(function()
+        local fallDamageScript = character:FindFirstChild("FallDamage")
+        if fallDamageScript then
+            fallDamageScript:Destroy()
+        end
+    end)
+end
+
+local function DisableGodMode()
+    if godModeConnection then
+        godModeConnection:Disconnect()
+        godModeConnection = nil
+    end
+    
+    if humanoid then
+        humanoid.MaxHealth = originalMaxHealth
+        humanoid.Health = originalMaxHealth
+    end
+end
+
+-- Setup character listener for God Mode
+player.CharacterAdded:Connect(function(newChar)
+    character = newChar
+    humanoid = character:WaitForChild("Humanoid")
+    humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    
+    if getgenv().GodModeActive then
+        task.wait(0.5)
+        EnableGodMode()
+    end
+end)
+
+MainSection:Toggle({
+    Title = "God Mode",
+    Desc = "Invincible from all damage including fall damage",
+    Default = false,
+    Callback = function(Value)
+        getgenv().GodModeActive = Value
+        
+        if Value then
+            EnableGodMode()
+            WindUI:Notify({
+                Title = "God Mode",
+                Desc = "God Mode diaktifkan - Anda kebal dari semua damage!",
+                Icon = "shield"
+            })
+        else
+            DisableGodMode()
+            WindUI:Notify({
+                Title = "God Mode",
+                Desc = "God Mode dinonaktifkan",
+                Icon = "shield-off"
+            })
+        end
+    end
+})
+
+MainSection:Space()
+
 -------------------------------------------------------------
 -- BYPASS TAB
 -------------------------------------------------------------
