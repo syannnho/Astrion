@@ -799,6 +799,8 @@ local function main()
     -- Animate
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     MainFrame.BackgroundTransparency = 1
+    local frameWidth = isMobile() and 350 or 600
+    local frameHeight = math.floor(frameWidth / 16 * 9)
     TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back), {
         Size = UDim2.new(0, frameWidth, 0, frameHeight),
         BackgroundTransparency = 0
@@ -842,9 +844,18 @@ local function main()
                 
                 if countdownConnection then
                     countdownConnection:Disconnect()
+                    countdownConnection = nil
                 end
                 
                 countdownConnection = game:GetService("RunService").Heartbeat:Connect(function()
+                    if not ScreenGui or not ScreenGui.Parent then
+                        if countdownConnection then
+                            countdownConnection:Disconnect()
+                            countdownConnection = nil
+                        end
+                        return
+                    end
+                    
                     local timeRemaining = newExpireTime - os.time()
                     if timeRemaining > 0 then
                         CountdownLabel.Text = formatTimeRemaining(timeRemaining)
@@ -863,11 +874,18 @@ local function main()
                     else
                         if countdownConnection then
                             countdownConnection:Disconnect()
+                            countdownConnection = nil
                         end
-                        delfile(TRIAL_STORAGE_FILE)
+                        if isfile(TRIAL_STORAGE_FILE) then
+                            delfile(TRIAL_STORAGE_FILE)
+                        end
                         task.wait(2)
-                        if ScreenGui then ScreenGui:Destroy() end
-                        if BlurEffect then BlurEffect:Destroy() end
+                        if ScreenGui and ScreenGui.Parent then
+                            ScreenGui:Destroy()
+                        end
+                        if BlurEffect and BlurEffect.Parent then
+                            BlurEffect:Destroy()
+                        end
                         main()
                     end
                 end)
@@ -946,13 +964,19 @@ local function main()
     
     -- Cleanup
     ScreenGui.Destroying:Connect(function()
+        print("🗑️ Cleaning up connections...")
         if countdownConnection then
             countdownConnection:Disconnect()
+            countdownConnection = nil
         end
         if vipCheckConnection then
             task.cancel(vipCheckConnection)
+            vipCheckConnection = nil
         end
     end)
+    
+    -- Prevent premature destruction
+    ScreenGui.Parent = syn and game.CoreGui or LocalPlayer:WaitForChild("PlayerGui")
 end
 
 -- Run
