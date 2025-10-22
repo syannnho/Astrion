@@ -26,7 +26,7 @@ local hrp                = nil
 -- ============================================================
 -- ROUTE LINK (SINGLE MAP ONLY)
 -- ============================================================
-local ROUTE_LINK = "https://raw.githubusercontent.com/Bardenss/YAHAYUK/refs/heads/main/cadangan.lua"
+local ROUTE_LINK = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/ANEH/ANEH.lua"
 
 -- ============================================================
 -- GLOBALS
