@@ -26,7 +26,7 @@ local hrp                = nil
 -- ============================================================
 -- ROUTE LINK (SINGLE MAP ONLY)
 -- ============================================================
-local ROUTE_LINK = "https://raw.githubusercontent.com/syannnho/Astrion/refs/heads/main/DATAMAP/YNTKTS/YNTKTS.lua"
+local ROUTE_LINK = "https://raw.githubusercontent.com/Bardenss/YAHAYUK/refs/heads/main/cadangan.lua"
 
 -- ============================================================
 -- GLOBALS
@@ -755,6 +755,63 @@ MainTab:Toggle({
     end
 })
 
+MainTab:Section({ Title = "Anti Admin" })
+
+MainTab:Toggle({
+    Title = "🛡️ Anti Admin",
+    Icon = "lucide:shield-alert",
+    Desc = "Kick admin secara otomatis jika join server",
+    Value = false,
+    Callback = function(state)
+        antiAdminActive = state
+        if state then
+            enableAntiAdmin()
+            notify("Anti Admin", "✅ Aktif - Admin akan dikick otomatis!", 3)
+        else
+            disableAntiAdmin()
+            notify("Anti Admin", "❌ Nonaktif", 2)
+        end
+    end
+})
+
+MainTab:Input({
+    Title = "➕ Tambah Admin",
+    Placeholder = "Masukkan username admin",
+    Icon = "lucide:user-plus",
+    Callback = function(text)
+        if text and text ~= "" then
+            local exists = false
+            for _, adminName in pairs(adminList) do
+                if adminName:lower() == text:lower() then
+                    exists = true
+                    break
+                end
+            end
+            
+            if not exists then
+                table.insert(adminList, text)
+                notify("Anti Admin", "Admin '" .. text .. "' ditambahkan ke daftar!", 3)
+            else
+                notify("Anti Admin", "Admin '" .. text .. "' sudah ada di daftar!", 2)
+            end
+        end
+    end
+})
+
+MainTab:Button({
+    Title = "📋 Lihat Daftar Admin",
+    Icon = "lucide:list",
+    Desc = "Tampilkan semua admin yang ada di daftar",
+    Callback = function()
+        if #adminList == 0 then
+            notify("Anti Admin", "Daftar admin masih kosong!", 2)
+        else
+            local adminNames = table.concat(adminList, ", ")
+            notify("Daftar Admin", "Admin: " .. adminNames, 5)
+        end
+    end
+})
+
 -- ============================================================
 -- AUTOMATION TAB
 -- ============================================================
@@ -1103,232 +1160,6 @@ for i = 1, 18 do
     })
 end
 
--- ============================================================
--- ADVANCED TAB (ANTI ADMIN)
--- ============================================================
-local AdvancedTab = Window:Tab({ Title = "Advanced", Icon = "lucide:shield-alert" })
-AdvancedTab:Section({ Title = "🛡️ Anti Admin System" })
-
-AdvancedTab:Paragraph({
-    Title = "ℹ️ Informasi",
-    Content = "Anti Admin akan otomatis kick admin dari server saat mereka bergabung. Tambahkan username admin ke daftar untuk melindungi server Anda."
-})
-
-AdvancedTab:Toggle({
-    Title = "🛡️ Enable Anti Admin",
-    Icon = "lucide:shield-check",
-    Desc = "Aktifkan untuk kick admin otomatis",
-    Value = false,
-    Callback = function(state)
-        antiAdminActive = state
-        if state then
-            enableAntiAdmin()
-            notify("Anti Admin", "✅ Sistem Anti Admin Aktif!\nAdmin akan dikick otomatis!", 3)
-        else
-            disableAntiAdmin()
-            notify("Anti Admin", "❌ Sistem Anti Admin Nonaktif", 2)
-        end
-    end
-})
-
-AdvancedTab:Space()
-AdvancedTab:Section({ Title = "📝 Kelola Daftar Admin" })
-
-AdvancedTab:Input({
-    Title = "➕ Tambah Admin ke Daftar",
-    Placeholder = "Masukkan username admin (case-insensitive)",
-    Icon = "lucide:user-plus",
-    Desc = "Ketik username dan tekan Enter",
-    Callback = function(text)
-        if text and text ~= "" then
-            local trimmed = text:match("^%s*(.-)%s*$")
-            
-            if trimmed == "" then
-                notify("Anti Admin", "❌ Username tidak valid!", 2)
-                return
-            end
-            
-            local exists = false
-            for _, adminName in pairs(adminList) do
-                if adminName:lower() == trimmed:lower() then
-                    exists = true
-                    break
-                end
-            end
-            
-            if not exists then
-                table.insert(adminList, trimmed)
-                notify("Anti Admin", "✅ Admin '" .. trimmed .. "' ditambahkan!\nTotal: " .. #adminList .. " admin", 3)
-                
-                if antiAdminActive then
-                    checkAndKickAdmin()
-                end
-            else
-                notify("Anti Admin", "⚠️ Admin '" .. trimmed .. "' sudah ada di daftar!", 2)
-            end
-        else
-            notify("Anti Admin", "❌ Masukkan username yang valid!", 2)
-        end
-    end
-})
-
-AdvancedTab:Space()
-
-AdvancedTab:Button({
-    Title = "📋 Tampilkan Daftar Admin",
-    Icon = "lucide:list",
-    Desc = "Lihat semua admin di daftar hitam",
-    Callback = function()
-        if #adminList == 0 then
-            notify("Daftar Admin", "📭 Daftar masih kosong!\nTambahkan admin untuk mulai proteksi.", 3)
-        else
-            local adminNames = "📋 Daftar Admin (" .. #adminList .. "):\n\n"
-            for i, admin in ipairs(adminList) do
-                adminNames = adminNames .. i .. ". " .. admin .. "\n"
-            end
-            notify("Daftar Admin", adminNames, 7)
-        end
-    end
-})
-
-AdvancedTab:Space()
-
-AdvancedTab:Button({
-    Title = "🗑️ Hapus Admin dari Daftar",
-    Icon = "lucide:trash-2",
-    Desc = "Ketik username admin yang ingin dihapus",
-    Callback = function()
-        if #adminList == 0 then
-            notify("Anti Admin", "📭 Daftar admin kosong!", 2)
-            return
-        end
-        
-        notify("Anti Admin", "💡 Gunakan input field di bawah untuk menghapus admin", 3)
-    end
-})
-
-AdvancedTab:Input({
-    Title = "➖ Hapus Admin",
-    Placeholder = "Username admin yang akan dihapus",
-    Icon = "lucide:user-minus",
-    Callback = function(text)
-        if text and text ~= "" then
-            local trimmed = text:match("^%s*(.-)%s*$")
-            local found = false
-            local foundIndex = 0
-            
-            for i, adminName in pairs(adminList) do
-                if adminName:lower() == trimmed:lower() then
-                    found = true
-                    foundIndex = i
-                    break
-                end
-            end
-            
-            if found then
-                table.remove(adminList, foundIndex)
-                notify("Anti Admin", "✅ Admin '" .. trimmed .. "' dihapus dari daftar!\nSisa: " .. #adminList .. " admin", 3)
-            else
-                notify("Anti Admin", "❌ Admin '" .. trimmed .. "' tidak ditemukan di daftar!", 2)
-            end
-        end
-    end
-})
-
-AdvancedTab:Space()
-AdvancedTab:Section({ Title = "⚙️ Pengaturan Lanjutan" })
-
-AdvancedTab:Button({
-    Title = "🔍 Scan Admin di Server",
-    Icon = "lucide:search",
-    Desc = "Cek apakah ada admin di server saat ini",
-    Callback = function()
-        local foundAdmins = {}
-        
-        for _, plr in pairs(Players:GetPlayers()) do
-            if plr ~= player then
-                local username = plr.Name:lower()
-                for _, adminName in pairs(adminList) do
-                    if username == adminName:lower() then
-                        table.insert(foundAdmins, plr.Name)
-                        break
-                    end
-                end
-            end
-        end
-        
-        if #foundAdmins > 0 then
-            local adminText = "⚠️ Admin Terdeteksi:\n\n"
-            for i, admin in ipairs(foundAdmins) do
-                adminText = adminText .. i .. ". " .. admin .. "\n"
-            end
-            notify("Scan Result", adminText, 5)
-            
-            if antiAdminActive then
-                notify("Anti Admin", "🎯 Mencoba kick admin...", 2)
-                task.wait(1)
-                checkAndKickAdmin()
-            end
-        else
-            notify("Scan Result", "✅ Tidak ada admin terdeteksi di server!\nServer aman.", 3)
-        end
-    end
-})
-
-AdvancedTab:Space()
-
-AdvancedTab:Button({
-    Title = "🔄 Reset Daftar Admin",
-    Icon = "lucide:rotate-ccw",
-    Desc = "Hapus semua admin dari daftar (default tetap ada)",
-    Callback = function()
-        adminList = {
-            "erlamkari22",
-            "admin1", 
-            "admin2"
-        }
-        notify("Anti Admin", "🔄 Daftar admin direset ke default!\nTotal: " .. #adminList .. " admin", 3)
-    end
-})
-
-AdvancedTab:Space()
-
-AdvancedTab:Button({
-    Title = "🧹 Hapus Semua Admin",
-    Icon = "lucide:trash",
-    Desc = "Kosongkan seluruh daftar admin",
-    Callback = function()
-        adminList = {}
-        notify("Anti Admin", "🧹 Semua admin dihapus!\nDaftar sekarang kosong.", 3)
-    end
-})
-
-AdvancedTab:Space()
-AdvancedTab:Section({ Title = "📊 Statistik" })
-
-AdvancedTab:Button({
-    Title = "📈 Info Statistik",
-    Icon = "lucide:bar-chart",
-    Desc = "Lihat statistik Anti Admin",
-    Callback = function()
-        local totalPlayers = #Players:GetPlayers() - 1
-        local statusText = antiAdminActive and "🟢 Aktif" or "🔴 Nonaktif"
-        
-        local stats = string.format([[
-📊 Statistik Anti Admin
-
-Status: %s
-Total Admin di Daftar: %d
-Player di Server: %d
-Your Username: %s
-
-💡 Tip: Tambahkan admin ke daftar
-untuk proteksi maksimal!
-]], statusText, #adminList, totalPlayers, player.Name)
-        
-        notify("Statistik", stats, 7)
-    end
-})
 -- ============================================================
 -- TOOLS TAB
 -- ============================================================
